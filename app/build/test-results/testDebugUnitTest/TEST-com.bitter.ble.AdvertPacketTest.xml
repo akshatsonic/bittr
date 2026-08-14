@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.bitter.ble.AdvertPacketTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:25:15" hostname="Akshats-MacBook-Air.local" time="0.003">
+<testsuite name="com.bitter.ble.AdvertPacketTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:34:59" hostname="Akshats-MacBook-Air.local" time="0.062">
   <properties/>
-  <testcase name="decode rejects wrong length" classname="com.bitter.ble.AdvertPacketTest" time="0.001"/>
-  <testcase name="decode rejects wrong company id" classname="com.bitter.ble.AdvertPacketTest" time="0.0"/>
+  <testcase name="decode rejects wrong length" classname="com.bitter.ble.AdvertPacketTest" time="0.019"/>
+  <testcase name="decode rejects wrong company id" classname="com.bitter.ble.AdvertPacketTest" time="0.038"/>
   <testcase name="encode begins with the company id 0xFFFF" classname="com.bitter.ble.AdvertPacketTest" time="0.0"/>
   <testcase name="packet is exactly 28 bytes" classname="com.bitter.ble.AdvertPacketTest" time="0.0"/>
   <testcase name="device id preserves full 4 byte range" classname="com.bitter.ble.AdvertPacketTest" time="0.0"/>
-  <testcase name="encode and decode round trip" classname="com.bitter.ble.AdvertPacketTest" time="0.002"/>
+  <testcase name="encode and decode round trip" classname="com.bitter.ble.AdvertPacketTest" time="0.003"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

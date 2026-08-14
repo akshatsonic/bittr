@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.bitter.mesh.MeshEndToEndTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:25:15" hostname="Akshats-MacBook-Air.local" time="0.072">
+<testsuite name="com.bitter.mesh.MeshEndToEndTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:35:00" hostname="Akshats-MacBook-Air.local" time="0.109">
   <properties/>
-  <testcase name="likes propagate like posts do" classname="com.bitter.mesh.MeshEndToEndTest" time="0.066"/>
+  <testcase name="likes propagate like posts do" classname="com.bitter.mesh.MeshEndToEndTest" time="0.101"/>
   <testcase name="sync is idempotent and converges to the union" classname="com.bitter.mesh.MeshEndToEndTest" time="0.002"/>
   <testcase name="matching roots produce no changes" classname="com.bitter.mesh.MeshEndToEndTest" time="0.001"/>
   <testcase name="two nodes converge on a single post" classname="com.bitter.mesh.MeshEndToEndTest" time="0.001"/>
   <testcase name="three nodes relay a post through an intermediary" classname="com.bitter.mesh.MeshEndToEndTest" time="0.002"/>
-  <testcase name="roots differ when one node has extra events" classname="com.bitter.mesh.MeshEndToEndTest" time="0.0"/>
+  <testcase name="roots differ when one node has extra events" classname="com.bitter.mesh.MeshEndToEndTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

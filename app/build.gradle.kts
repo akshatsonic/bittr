@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    jacoco
 }
 
 android {
@@ -19,6 +20,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            isTestCoverageEnabled = true
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -72,3 +76,51 @@ dependencies {
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
+
+val jacocoTestReport = tasks.register<JacocoReport>("jacocoTestReport") {
+    dependsOn("testDebugUnitTest")
+
+    val corePackages = listOf(
+        "com/bitter/crypto/**",
+        "com/bitter/model/**",
+        "com/bitter/merkle/**",
+        "com/bitter/ble/AdvertPacket*",
+        "com/bitter/ble/FrameCodec*",
+        "com/bitter/ble/FrameStream*",
+        "com/bitter/ble/CollisionResolver*",
+        "com/bitter/ble/BleProtocol*",
+        "com/bitter/sync/**",
+        "com/bitter/store/DayKey*",
+        "com/bitter/store/EventRepository*",
+        "com/bitter/store/InMemoryEventStore*",
+        "com/bitter/mesh/**",
+        "com/bitter/ui/TimelineModel*",
+    )
+
+    val classDirs = fileTree("$buildDir/tmp/kotlin-classes/debug") {
+        include(corePackages)
+    }
+
+    sourceDirectories.setFrom(
+        files(
+            "src/main/java/com/bitter/crypto",
+            "src/main/java/com/bitter/model",
+            "src/main/java/com/bitter/merkle",
+            "src/main/java/com/bitter/ble",
+            "src/main/java/com/bitter/sync",
+            "src/main/java/com/bitter/store",
+            "src/main/java/com/bitter/mesh",
+            "src/main/java/com/bitter/ui",
+        ),
+    )
+    classDirectories.setFrom(classDirs)
+    executionData.setFrom(fileTree("$buildDir") {
+        include("outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec")
+    })
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+}
+

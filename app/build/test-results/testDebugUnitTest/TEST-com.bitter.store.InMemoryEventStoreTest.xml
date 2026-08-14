@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.bitter.store.InMemoryEventStoreTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:25:15" hostname="Akshats-MacBook-Air.local" time="0.003">
+<testsuite name="com.bitter.store.InMemoryEventStoreTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:35:00" hostname="Akshats-MacBook-Air.local" time="0.003">
   <properties/>
   <testcase name="duplicate ids are ignored" classname="com.bitter.store.InMemoryEventStoreTest" time="0.001"/>
   <testcase name="insert all then read back in chronological order" classname="com.bitter.store.InMemoryEventStoreTest" time="0.001"/>

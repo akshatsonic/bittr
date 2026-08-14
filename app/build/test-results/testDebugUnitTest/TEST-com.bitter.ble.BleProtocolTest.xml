@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.bitter.ble.BleProtocolTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:34:59" hostname="Akshats-MacBook-Air.local" time="0.003">
+  <properties/>
+  <testcase name="fetch request round trips multiple leaves" classname="com.bitter.ble.BleProtocolTest" time="0.001"/>
+  <testcase name="leaf count answer round trips" classname="com.bitter.ble.BleProtocolTest" time="0.0"/>
+  <testcase name="event payload round trips" classname="com.bitter.ble.BleProtocolTest" time="0.0"/>
+  <testcase name="leaf count query round trips" classname="com.bitter.ble.BleProtocolTest" time="0.0"/>
+  <testcase name="node hash query round trips" classname="com.bitter.ble.BleProtocolTest" time="0.001"/>
+  <testcase name="node hash answer round trips" classname="com.bitter.ble.BleProtocolTest" time="0.001"/>
+  <testcase name="decode query rejects garbage" classname="com.bitter.ble.BleProtocolTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

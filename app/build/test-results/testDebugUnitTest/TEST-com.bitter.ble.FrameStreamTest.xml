@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.bitter.ble.FrameStreamTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:34:59" hostname="Akshats-MacBook-Air.local" time="0.001">
+  <properties/>
+  <testcase name="multiple frames split across arbitrary chunks reassemble in order" classname="com.bitter.ble.FrameStreamTest" time="0.0"/>
+  <testcase name="partial trailing data is buffered for the next feed" classname="com.bitter.ble.FrameStreamTest" time="0.0"/>
+  <testcase name="frame fed byte by byte still assembles correctly" classname="com.bitter.ble.FrameStreamTest" time="0.001"/>
+  <testcase name="single frame fed all at once yields one frame" classname="com.bitter.ble.FrameStreamTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

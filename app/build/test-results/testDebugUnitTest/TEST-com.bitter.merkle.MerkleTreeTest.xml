@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.bitter.merkle.MerkleTreeTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:25:15" hostname="Akshats-MacBook-Air.local" time="0.0">
+<testsuite name="com.bitter.merkle.MerkleTreeTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:35:00" hostname="Akshats-MacBook-Air.local" time="0.001">
   <properties/>
   <testcase name="two leaves match known vector" classname="com.bitter.merkle.MerkleTreeTest" time="0.0"/>
   <testcase name="single leaf is its own root" classname="com.bitter.merkle.MerkleTreeTest" time="0.0"/>

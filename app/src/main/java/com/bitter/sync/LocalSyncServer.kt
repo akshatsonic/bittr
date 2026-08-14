@@ -18,4 +18,8 @@ class LocalSyncServer(events: List<Event>) : SyncPeer {
 
     override fun eventsForLeaves(leafHashes: List<ByteArray>): List<Event> =
         leafHashes.mapNotNull { eventByLeafHex[Sha256.hex(it)] }
+
+    fun root(): ByteArray = MerkleTree.rootOf(sortedLeaves)
+
+    fun truncatedRoot(): ByteArray = MerkleTree.truncateRoot(root())
 }

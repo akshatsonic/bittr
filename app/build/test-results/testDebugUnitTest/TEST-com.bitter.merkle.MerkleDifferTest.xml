@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.bitter.merkle.MerkleDifferTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:25:15" hostname="Akshats-MacBook-Air.local" time="0.062">
+<testsuite name="com.bitter.merkle.MerkleDifferTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:34:59" hostname="Akshats-MacBook-Air.local" time="0.047">
   <properties/>
-  <testcase name="single missing leaf in the middle" classname="com.bitter.merkle.MerkleDifferTest" time="0.03"/>
-  <testcase name="single missing leaf at the end" classname="com.bitter.merkle.MerkleDifferTest" time="0.001"/>
+  <testcase name="single missing leaf in the middle" classname="com.bitter.merkle.MerkleDifferTest" time="0.013"/>
+  <testcase name="single missing leaf at the end" classname="com.bitter.merkle.MerkleDifferTest" time="0.002"/>
   <testcase name="empty client yields everything missing" classname="com.bitter.merkle.MerkleDifferTest" time="0.001"/>
-  <testcase name="single missing leaf at the start" classname="com.bitter.merkle.MerkleDifferTest" time="0.002"/>
-  <testcase name="one hundred server leaves with ten missing" classname="com.bitter.merkle.MerkleDifferTest" time="0.012"/>
+  <testcase name="single missing leaf at the start" classname="com.bitter.merkle.MerkleDifferTest" time="0.001"/>
+  <testcase name="one hundred server leaves with ten missing" classname="com.bitter.merkle.MerkleDifferTest" time="0.014"/>
   <testcase name="empty server yields nothing" classname="com.bitter.merkle.MerkleDifferTest" time="0.0"/>
   <testcase name="disjoint sets yield all server leaves missing" classname="com.bitter.merkle.MerkleDifferTest" time="0.001"/>
-  <testcase name="server is a superset of client" classname="com.bitter.merkle.MerkleDifferTest" time="0.004"/>
+  <testcase name="server is a superset of client" classname="com.bitter.merkle.MerkleDifferTest" time="0.005"/>
   <testcase name="client is a superset of server" classname="com.bitter.merkle.MerkleDifferTest" time="0.004"/>
-  <testcase name="odd and even sized server with scattered gaps" classname="com.bitter.merkle.MerkleDifferTest" time="0.002"/>
+  <testcase name="odd and even sized server with scattered gaps" classname="com.bitter.merkle.MerkleDifferTest" time="0.003"/>
   <testcase name="client has extra leaves not on server" classname="com.bitter.merkle.MerkleDifferTest" time="0.002"/>
-  <testcase name="identical sets yield no missing leaves" classname="com.bitter.merkle.MerkleDifferTest" time="0.001"/>
+  <testcase name="identical sets yield no missing leaves" classname="com.bitter.merkle.MerkleDifferTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>
