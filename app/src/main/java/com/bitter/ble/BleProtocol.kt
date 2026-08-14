@@ -15,6 +15,7 @@ object BleProtocol {
     // MERKLE_QUERY opcodes
     const val OP_NODE_HASH = 0
     const val OP_LEAF_COUNT = 1
+    const val OP_ALL_EVENTS = 3
 
     // EVENT_FETCH opcodes
     const val OP_FETCH = 0 // client -> server: request events for a list of leaves
@@ -24,6 +25,7 @@ object BleProtocol {
     sealed interface Query {
         data object LeafCount : Query
         data class NodeHash(val lo: Int, val hi: Int) : Query
+        data object AllEvents : Query
     }
 
     sealed interface Answer {
@@ -41,11 +43,14 @@ object BleProtocol {
 
     fun encodeLeafCountQuery(): ByteArray = byteArrayOf(OP_LEAF_COUNT.toByte())
 
+    fun encodeAllEventsQuery(): ByteArray = byteArrayOf(OP_ALL_EVENTS.toByte())
+
     fun decodeQuery(payload: ByteArray): Query? = try {
         val buf = java.nio.ByteBuffer.wrap(payload)
         when (buf.get().toInt()) {
             OP_NODE_HASH -> Query.NodeHash(buf.int, buf.int)
             OP_LEAF_COUNT -> Query.LeafCount
+            OP_ALL_EVENTS -> Query.AllEvents
             else -> null
         }
     } catch (e: Exception) {

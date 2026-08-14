@@ -151,6 +151,10 @@ class GattServerHandler(
                 Timber.d("GATT leafCount query answered: %d", peer.leafCount)
                 notify(device, characteristic, BleProtocol.encodeLeafCountAnswer(peer.leafCount))
             }
+            BleProtocol.Query.AllEvents -> {
+                Timber.d("GATT all-events query: streaming %d events", peer.allEvents().size)
+                streamEvents(device, peer.allEvents())
+            }
             null -> Timber.w("GATT unknown merkle query: %s", payload.size)
         }
     }
@@ -178,11 +182,14 @@ class GattServerHandler(
 
     private fun handleFetch(device: BluetoothDevice, payload: ByteArray) {
         val peer = serverProvider()
-        val characteristic = gattServer.getService(BleProtocol.SERVICE_UUID)
-            ?.getCharacteristic(BleProtocol.CHAR_EVENT_FETCH) ?: return
         val leaves = BleProtocol.decodeFetchRequest(payload) ?: return
         Timber.d("GATT fetch request: %d leaves", leaves.size)
-        val events = peer.eventsForLeaves(leaves)
+        streamEvents(device, peer.eventsForLeaves(leaves))
+    }
+
+    private fun streamEvents(device: BluetoothDevice, events: List<Event>) {
+        val characteristic = gattServer.getService(BleProtocol.SERVICE_UUID)
+            ?.getCharacteristic(BleProtocol.CHAR_EVENT_FETCH) ?: return
         for (event in events) {
             val frame = FrameCodec.encode(BleProtocol.encodeEventStream(EventWireCodec.encode(event)))
             notify(device, characteristic, frame)

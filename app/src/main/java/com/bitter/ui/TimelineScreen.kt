@@ -96,6 +96,11 @@ private fun PostCard(item: TimelineItem, onLike: () -> Unit) {
                 text = item.post.content,
                 style = MaterialTheme.typography.bodyLarge,
             )
+            Text(
+                text = TimeFormatter.format(item.post.createdAt),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Button(onClick = onLike) {
                     Text("Like")

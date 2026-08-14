@@ -196,6 +196,19 @@ class GattClientSync(
             Timber.d("GATT pulled %d events", events.size)
             return events
         }
+
+        override fun allEvents(): List<Event> {
+            write(BleProtocol.CHAR_MERKLE_QUERY, BleProtocol.encodeAllEventsQuery())
+            val events = mutableListOf<Event>()
+            while (true) {
+                val frame = eventQueue.poll(TIMEOUT_SECONDS, TimeUnit.SECONDS) ?: break
+                if (frame.isEmpty()) break
+                val eventBytes = BleProtocol.decodeEventStream(frame) ?: continue
+                EventWireCodec.decode(eventBytes)?.let { events.add(it) }
+            }
+            Timber.d("GATT pulled %d events (all)", events.size)
+            return events
+        }
     }
 
     private companion object {

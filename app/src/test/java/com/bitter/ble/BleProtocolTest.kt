@@ -19,6 +19,11 @@ class BleProtocolTest {
     }
 
     @Test
+    fun `all events query round trips`() {
+        assertEquals(BleProtocol.Query.AllEvents, BleProtocol.decodeQuery(BleProtocol.encodeAllEventsQuery()))
+    }
+
+    @Test
     fun `node hash answer round trips`() {
         val hash = ByteArray(32) { it.toByte() }
         val answer = BleProtocol.decodeAnswer(BleProtocol.encodeNodeHashAnswer(1, 2, hash)) as BleProtocol.Answer.NodeHash

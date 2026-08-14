@@ -26,6 +26,7 @@ class SyncEngineTest {
         override fun nodeHash(lo: Int, hi: Int): ByteArray = MerkleTree.rootOf(sorted.subList(lo, hi))
         override fun leafAt(index: Int): ByteArray = sorted[index]
         override fun eventsForLeaves(leafHashes: List<ByteArray>): List<Event> = emptyList()
+        override fun allEvents(): List<Event> = emptyList()
     }
 
     private fun bruteForce(server: List<ByteArray>, client: List<ByteArray>): List<String> {
