@@ -7,19 +7,13 @@ import kotlin.test.assertNull
 
 class AdvertPacketTest {
 
-    private val root = ByteArray(20) { it.toByte() }
+    private val root = ByteArray(16) { it.toByte() }
 
     @Test
-    fun `packet is exactly 28 bytes`() {
+    fun `packet is exactly 22 bytes to fit legacy BLE advertising`() {
         val packet = AdvertPacket(1, 0x0A, 0x01020304, root)
         assertEquals(AdvertPacket.SIZE, AdvertPacket.encode(packet).size)
-    }
-
-    @Test
-    fun `encode begins with the company id 0xFFFF`() {
-        val bytes = AdvertPacket.encode(AdvertPacket(1, 0x0A, 0x01020304, root))
-        assertEquals(0xFF, bytes[0].toInt() and 0xFF)
-        assertEquals(0xFF, bytes[1].toInt() and 0xFF)
+        assertEquals(22, AdvertPacket.encode(packet).size)
     }
 
     @Test
@@ -34,20 +28,19 @@ class AdvertPacketTest {
 
     @Test
     fun `decode rejects wrong length`() {
-        assertNull(AdvertPacket.decode(ByteArray(27)))
-        assertNull(AdvertPacket.decode(ByteArray(29)))
-    }
-
-    @Test
-    fun `decode rejects wrong company id`() {
-        val bytes = AdvertPacket.encode(AdvertPacket(1, 0x0A, 0x01020304, root))
-        bytes[0] = 0x00
-        assertNull(AdvertPacket.decode(bytes))
+        assertNull(AdvertPacket.decode(ByteArray(21)))
+        assertNull(AdvertPacket.decode(ByteArray(23)))
     }
 
     @Test
     fun `device id preserves full 4 byte range`() {
         val packet = AdvertPacket(1, 0x0A, 0xFFFFFFFF.toInt(), root)
         assertEquals(0xFFFFFFFF.toInt(), AdvertPacket.decode(AdvertPacket.encode(packet))?.deviceId)
+    }
+
+    @Test
+    fun `root is 16 bytes`() {
+        val packet = AdvertPacket(1, 0x0A, 0x01020304, root)
+        assertEquals(16, AdvertPacket.decode(AdvertPacket.encode(packet))?.merkleRoot?.size)
     }
 }

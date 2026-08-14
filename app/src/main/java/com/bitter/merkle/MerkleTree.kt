@@ -20,5 +20,5 @@ object MerkleTree {
         return level[0]
     }
 
-    fun truncateRoot(root: ByteArray, length: Int = 20): ByteArray = root.copyOf(length)
+    fun truncateRoot(root: ByteArray, length: Int = 16): ByteArray = root.copyOf(length)
 }

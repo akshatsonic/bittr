@@ -11,6 +11,8 @@ coroutines = "1.9.0"
 junit = "4.13.2"
 kotlinTest = "2.0.21"
 coroutinesTest = "1.9.0"
+timber = "4.7.1"
+hyperion = "0.9.38"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -33,6 +35,9 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlinTest" }
 kotlin-test-junit = { group = "org.jetbrains.kotlin", name = "kotlin-test-junit", version.ref = "kotlinTest" }
+timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
+hyperion-core = { group = "com.willowtreeapps.hyperion", name = "hyperion-core", version.ref = "hyperion" }
+hyperion-timber = { group = "com.willowtreeapps.hyperion", name = "hyperion-timber", version.ref = "hyperion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

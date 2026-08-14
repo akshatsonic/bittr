@@ -12,8 +12,14 @@ object BleProtocol {
     const val ROOM_ID = 0x0A
     const val ADVERT_COMPANY_ID = 0xFFFF
 
+    // MERKLE_QUERY opcodes
     const val OP_NODE_HASH = 0
     const val OP_LEAF_COUNT = 1
+
+    // EVENT_FETCH opcodes
+    const val OP_FETCH = 0 // client -> server: request events for a list of leaves
+    const val OP_EVENT = 1 // server -> client: stream one event
+    const val OP_PUSH = 2 // client -> server: push one event
 
     sealed interface Query {
         data object LeafCount : Query
@@ -82,7 +88,7 @@ object BleProtocol {
 
     fun encodeFetchRequest(leaves: List<ByteArray>): ByteArray {
         val buf = java.nio.ByteBuffer.allocate(1 + 2 + leaves.size * 32)
-        buf.put(0)
+        buf.put(OP_FETCH.toByte())
         buf.putShort(leaves.size.toShort())
         leaves.forEach { buf.put(it.copyOf(32)) }
         return buf.array()
@@ -91,7 +97,7 @@ object BleProtocol {
     fun decodeFetchRequest(payload: ByteArray): List<ByteArray>? {
         return try {
             val buf = java.nio.ByteBuffer.wrap(payload)
-            if (buf.get().toInt() != 0) return null
+            if (buf.get().toInt() != OP_FETCH) return null
             val count = buf.short.toInt() and 0xFFFF
             List(count) { ByteArray(32).also { buf.get(it) } }
         } catch (e: Exception) {
@@ -99,23 +105,27 @@ object BleProtocol {
         }
     }
 
-    fun encodeEventPayload(eventBytes: ByteArray): ByteArray {
-        val buf = java.nio.ByteBuffer.allocate(1 + 4 + eventBytes.size)
-        buf.put(1)
-        buf.putInt(eventBytes.size)
+    fun encodeEventStream(eventBytes: ByteArray): ByteArray {
+        val buf = java.nio.ByteBuffer.allocate(1 + eventBytes.size)
+        buf.put(OP_EVENT.toByte())
         buf.put(eventBytes)
         return buf.array()
     }
 
-    fun decodeEventPayload(payload: ByteArray): ByteArray? {
-        return try {
-            val buf = java.nio.ByteBuffer.wrap(payload)
-            if (buf.get().toInt() != 1) return null
-            val len = buf.int
-            if (len < 0) return null
-            ByteArray(len).also { buf.get(it) }
-        } catch (e: Exception) {
-            null
-        }
+    fun decodeEventStream(payload: ByteArray): ByteArray? {
+        if (payload.isEmpty() || (payload[0].toInt() and 0xFF) != OP_EVENT) return null
+        return payload.copyOfRange(1, payload.size)
+    }
+
+    fun encodePush(eventBytes: ByteArray): ByteArray {
+        val buf = java.nio.ByteBuffer.allocate(1 + eventBytes.size)
+        buf.put(OP_PUSH.toByte())
+        buf.put(eventBytes)
+        return buf.array()
+    }
+
+    fun decodePush(payload: ByteArray): ByteArray? {
+        if (payload.isEmpty() || (payload[0].toInt() and 0xFF) != OP_PUSH) return null
+        return payload.copyOfRange(1, payload.size)
     }
 }

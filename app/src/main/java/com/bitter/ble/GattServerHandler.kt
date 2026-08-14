@@ -9,22 +9,26 @@ import android.bluetooth.BluetoothGattServerCallback
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.content.Context
-import android.util.Log
+import com.bitter.model.Event
 import com.bitter.model.EventWireCodec
 import com.bitter.sync.LocalSyncServer
+import timber.log.Timber
 import java.util.UUID
 
 class GattServerHandler(
     context: Context,
     private val serverProvider: () -> LocalSyncServer,
     private val username: String,
+    private val onPushEvents: (List<Event>) -> Unit,
 ) {
-    private val tag = "BitterGattServer"
     private val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val gattServer: BluetoothGattServer by lazy { manager.openGattServer(context, callback) }
 
+    private val writeStreams = mutableMapOf<String, FrameStream>()
+
     fun start() {
-        gattServer.addService(buildService())
+        val ok = gattServer.addService(buildService())
+        Timber.d("GATT server service added: $ok")
     }
 
     fun close() {
@@ -76,6 +80,10 @@ class GattServerHandler(
 
     private val callback = object : BluetoothGattServerCallback() {
 
+        override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
+            Timber.d("GATT server connection state: device=%s status=%d newState=%d", device.address, status, newState)
+        }
+
         override fun onCharacteristicWriteRequest(
             device: BluetoothDevice,
             requestId: Int,
@@ -85,9 +93,10 @@ class GattServerHandler(
             offset: Int,
             value: ByteArray,
         ) {
+            Timber.v("GATT write request: device=%s char=%s len=%d", device.address, characteristic.uuid, value.size)
             when (characteristic.uuid) {
                 BleProtocol.CHAR_MERKLE_QUERY -> handleQuery(device, value)
-                BleProtocol.CHAR_EVENT_FETCH -> handleFetch(device, value)
+                BleProtocol.CHAR_EVENT_FETCH -> handleEventFetchWrite(device, value)
             }
             if (responseNeeded) {
                 gattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
@@ -124,9 +133,31 @@ class GattServerHandler(
                 notify(device, characteristic, BleProtocol.encodeNodeHashAnswer(query.lo, query.hi, hash))
             }
             BleProtocol.Query.LeafCount -> {
+                Timber.d("GATT leafCount query answered: %d", peer.leafCount)
                 notify(device, characteristic, BleProtocol.encodeLeafCountAnswer(peer.leafCount))
             }
-            null -> Unit
+            null -> Timber.w("GATT unknown merkle query: %s", payload.size)
+        }
+    }
+
+    private fun handleEventFetchWrite(device: BluetoothDevice, value: ByteArray) {
+        val stream = writeStreams.getOrPut(device.address) { FrameStream() }
+        stream.feed(value).forEach { frame ->
+            val op = if (frame.isNotEmpty()) frame[0].toInt() and 0xFF else -1
+            when (op) {
+                BleProtocol.OP_FETCH -> handleFetch(device, frame)
+                BleProtocol.OP_PUSH -> {
+                    val eventBytes = BleProtocol.decodePush(frame)
+                    val event = eventBytes?.let { EventWireCodec.decode(it) }
+                    if (event != null) {
+                        Timber.d("GATT push received event id=%s author=%s", event.id.take(8), event.author)
+                        onPushEvents(listOf(event))
+                    } else {
+                        Timber.w("GATT push decoded to null event")
+                    }
+                }
+                else -> Timber.w("GATT unknown EVENT_FETCH opcode: %d", op)
+            }
         }
     }
 
@@ -135,9 +166,10 @@ class GattServerHandler(
         val characteristic = gattServer.getService(BleProtocol.SERVICE_UUID)
             ?.getCharacteristic(BleProtocol.CHAR_EVENT_FETCH) ?: return
         val leaves = BleProtocol.decodeFetchRequest(payload) ?: return
+        Timber.d("GATT fetch request: %d leaves", leaves.size)
         val events = peer.eventsForLeaves(leaves)
         for (event in events) {
-            val frame = FrameCodec.encode(EventWireCodec.encode(event))
+            val frame = FrameCodec.encode(BleProtocol.encodeEventStream(EventWireCodec.encode(event)))
             notify(device, characteristic, frame)
         }
         notify(device, characteristic, FrameCodec.encode(byteArrayOf()))

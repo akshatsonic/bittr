@@ -43,13 +43,25 @@ class BleProtocolTest {
     }
 
     @Test
-    fun `event payload round trips`() {
+    fun `event stream round trips`() {
         val bytes = byteArrayOf(1, 2, 3, 4, 5)
-        assertContentEquals(bytes, BleProtocol.decodeEventPayload(BleProtocol.encodeEventPayload(bytes)))
+        assertContentEquals(bytes, BleProtocol.decodeEventStream(BleProtocol.encodeEventStream(bytes)))
+    }
+
+    @Test
+    fun `push round trips`() {
+        val bytes = byteArrayOf(9, 8, 7, 6)
+        assertContentEquals(bytes, BleProtocol.decodePush(BleProtocol.encodePush(bytes)))
     }
 
     @Test
     fun `decode query rejects garbage`() {
         assertEquals(null, BleProtocol.decodeQuery(byteArrayOf(0x7F, 0x00)))
+    }
+
+    @Test
+    fun `decode push rejects non push opcode`() {
+        assertEquals(null, BleProtocol.decodePush(BleProtocol.encodeEventStream(byteArrayOf(1))))
+        assertEquals(null, BleProtocol.decodeEventStream(BleProtocol.encodePush(byteArrayOf(1))))
     }
 }

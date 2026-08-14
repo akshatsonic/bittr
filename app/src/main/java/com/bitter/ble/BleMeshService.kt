@@ -20,20 +20,18 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
 import com.bitter.BitterApplication
 import com.bitter.R
 import com.bitter.sync.LocalSyncServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 class BleMeshService : Service() {
 
-    private val tag = "BitterMesh"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var adapter: BluetoothAdapter? = null
@@ -49,11 +47,11 @@ class BleMeshService : Service() {
 
     private val advertiseCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
-            Log.d(tag, "advertising started")
+            Timber.d("ADVERTISE started ok (mode=%d)", settingsInEffect.mode)
         }
 
         override fun onStartFailure(errorCode: Int) {
-            Log.w(tag, "advertising failed: $errorCode")
+            Timber.w("ADVERTISE failed: errorCode=%d", errorCode)
         }
     }
 
@@ -63,7 +61,7 @@ class BleMeshService : Service() {
         }
 
         override fun onScanFailed(errorCode: Int) {
-            Log.w(tag, "scan failed: $errorCode")
+            Timber.w("SCAN failed: errorCode=%d", errorCode)
         }
     }
 
@@ -78,12 +76,21 @@ class BleMeshService : Service() {
         advertiser = adapter?.bluetoothLeAdvertiser
         scanner = adapter?.bluetoothLeScanner
 
-        gattServerHandler = GattServerHandler(this, { currentServer }, graph.username)
+        Timber.d("BleMeshService onCreate: adapter=%s advertiser=%s scanner=%s deviceId=%08x username=%s",
+            adapter != null, advertiser != null, scanner != null, graph.deviceId, graph.username)
+
+        gattServerHandler = GattServerHandler(
+            this,
+            { currentServer },
+            graph.username,
+            onPushEvents = { events -> scope.launch { graph.repository.applyRemote(events) } },
+        )
         gattServerHandler?.start()
 
         scope.launch {
             graph.repository.observeTimeline().collect { events ->
                 currentServer = LocalSyncServer(events)
+                Timber.d("timeline changed: %d events, root=%s", events.size, currentServer.truncatedRoot().toHex())
                 restartAdvertising(graph)
             }
         }
@@ -116,7 +123,10 @@ class BleMeshService : Service() {
 
     private fun restartAdvertising(graph: com.bitter.AppGraph) {
         val adv = advertiser ?: return
-        if (!hasPermissions()) return
+        if (!hasPermissions()) {
+            Timber.w("ADVERTISE skipped: no permission")
+            return
+        }
         adv.stopAdvertising(advertiseCallback)
 
         val packet = AdvertPacket(
@@ -134,38 +144,58 @@ class BleMeshService : Service() {
             .setConnectable(true)
             .setTimeout(0)
             .build()
+        Timber.d("ADVERTISE starting: deviceId=%08x root=%s", packet.deviceId, packet.merkleRoot.toHex())
         adv.startAdvertising(settings, data, advertiseCallback)
     }
 
     private fun startScanning() {
         val sc = scanner ?: return
-        if (!hasPermissions()) return
+        if (!hasPermissions()) {
+            Timber.w("SCAN skipped: no permission")
+            return
+        }
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
+        Timber.d("SCAN starting")
         sc.startScan(null, settings, scanCallback)
     }
 
     private fun handleScanResult(result: ScanResult) {
         val record = result.scanRecord ?: return
         val payload = record.getManufacturerSpecificData(BleProtocol.ADVERT_COMPANY_ID) ?: return
-        val packet = AdvertPacket.decode(payload) ?: return
+        val packet = AdvertPacket.decode(payload)
+        if (packet == null) {
+            Timber.v("SCAN: non-bittr advert (len=%d) from %s", payload.size, result.device.address)
+            return
+        }
         if (packet.roomId != BleProtocol.ROOM_ID) return
 
         val device = result.device
+        val myId = (application as BitterApplication).graph.deviceId
+        val rootMatches = currentServer.truncatedRoot().contentEquals(packet.merkleRoot)
+        val iAmClient = CollisionResolver.isClient(myId, packet.deviceId)
+
+        Timber.v("SCAN peer=%s rssi=%d peerId=%08x myId=%08x rootMatch=%s iAmClient=%s",
+            device.address, result.rssi, packet.deviceId, myId, rootMatches, iAmClient)
+
         seenDevices.add(device.address)
 
-        val rootMatches = currentServer.truncatedRoot().contentEquals(packet.merkleRoot)
         if (rootMatches) return
-        if (!CollisionResolver.isClient((application as BitterApplication).graph.deviceId, packet.deviceId)) return
+        if (!iAmClient) return
         if (device.address in syncingDevices) return
 
+        Timber.d("SCAN: root mismatch, connecting as client to %s", device.address)
         syncingDevices.add(device.address)
         scope.launch(Dispatchers.IO) {
             try {
                 val client = GattClientSync(this@BleMeshService, device)
                 if (client.connect() && client.awaitReady(10_000)) {
-                    (application as BitterApplication).graph.coordinator.pullFrom(client.peer)
+                    (application as BitterApplication).graph.coordinator.sync(client.peer) { events ->
+                        client.pushEvents(events)
+                    }
+                } else {
+                    Timber.w("GATT connect/ready timed out for %s", device.address)
                 }
                 client.close()
             } finally {
@@ -175,7 +205,7 @@ class BleMeshService : Service() {
     }
 
     private fun startForegroundNotification() {
-        val channelId = "bitter-mesh"
+        val channelId = "bittr-mesh"
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(
             NotificationChannel(
@@ -192,6 +222,9 @@ class BleMeshService : Service() {
             .build()
         startForeground(NOTIFICATION_ID, notification)
     }
+
+    private fun ByteArray.toHex(): String =
+        joinToString("") { byte -> "%02x".format(byte.toInt() and 0xFF) }
 
     private companion object {
         const val NOTIFICATION_ID = 1

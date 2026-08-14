@@ -56,10 +56,10 @@ class MerkleTreeTest {
     }
 
     @Test
-    fun `truncate root cuts to 20 bytes`() {
+    fun `truncate root cuts to 16 bytes`() {
         val root = MerkleTree.rootOf(listOf(leafOf("a")))
-        assertEquals(20, MerkleTree.truncateRoot(root).size)
-        assertContentEquals(root.copyOf(20), MerkleTree.truncateRoot(root))
+        assertEquals(16, MerkleTree.truncateRoot(root).size)
+        assertContentEquals(root.copyOf(16), MerkleTree.truncateRoot(root))
     }
 
     @Test

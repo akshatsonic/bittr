@@ -14,8 +14,8 @@ android {
         applicationId = "com.bitter"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -68,6 +68,10 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.timber)
+
+    debugImplementation(libs.hyperion.core)
+    debugImplementation(libs.hyperion.timber)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)

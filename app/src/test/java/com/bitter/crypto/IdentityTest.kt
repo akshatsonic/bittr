@@ -21,15 +21,15 @@ class IdentityTest {
     }
 
     @Test
-    fun `username follows the bitter prefix format`() {
+    fun `username follows the bittr prefix format`() {
         val name = IdentityDerivation.deriveUsername("some-fingerprint")
-        assertTrue(name.startsWith("bitter-"), "expected 'bitter-' prefix, got: $name")
-        assertTrue(name.length > "bitter-".length, "expected a non-empty handle suffix")
+        assertTrue(name.startsWith("bittr-"), "expected 'bittr-' prefix, got: $name")
+        assertTrue(name.length > "bittr-".length, "expected a non-empty handle suffix")
     }
 
     @Test
     fun `empty fingerprint still yields a valid username`() {
         val name = IdentityDerivation.deriveUsername("")
-        assertTrue(name.startsWith("bitter-"))
+        assertTrue(name.startsWith("bittr-"))
     }
 }

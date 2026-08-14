@@ -23,10 +23,8 @@ class MeshEndToEndTest {
     }
 
     private suspend fun mutualSync(a: MeshNode, b: MeshNode) {
-        val serverA = LocalSyncServer(a.repository.todayEvents())
         val serverB = LocalSyncServer(b.repository.todayEvents())
-        b.coordinator.pullFrom(serverA)
-        a.coordinator.pullFrom(serverB)
+        a.coordinator.sync(serverB) { events -> b.repository.applyRemote(events) }
     }
 
     @Test

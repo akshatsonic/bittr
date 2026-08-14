@@ -34,7 +34,7 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "Bitter",
+                text = "Bittr",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
