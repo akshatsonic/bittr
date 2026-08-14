@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Bitter</string>
+    <string name="notification_channel_name">Bitter mesh</string>
+    <string name="notification_channel_description">Keeps the offline BLE mesh running in the background</string>
+    <string name="notification_title">Bitter is running</string>
+    <string name="notification_text">Using Bluetooth to sync the room timeline</string>
+</resources>
