@@ -28,6 +28,15 @@ class GattClientSync(
     @Volatile
     private var gatt: BluetoothGatt? = null
 
+    @Volatile
+    private var mtu = DEFAULT_MTU
+
+    @Volatile
+    private var mtuReady = false
+
+    @Volatile
+    private var cccdConfirmed = 0
+
     private val cccdUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
     private val callback = object : BluetoothGattCallback() {
@@ -40,13 +49,27 @@ class GattClientSync(
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
             Timber.d("GATT services discovered: status=%d", status)
-            g.requestMtu(512)
+            if (!g.requestMtu(512)) {
+                Timber.w("GATT requestMtu returned false, using default MTU")
+                mtu = DEFAULT_MTU
+                mtuReady = true
+                enableNotifications(g)
+                maybeReady()
+            }
         }
 
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
             Timber.d("GATT MTU changed: mtu=%d status=%d", mtu, status)
+            this@GattClientSync.mtu = if (status == BluetoothGatt.GATT_SUCCESS) mtu else DEFAULT_MTU
+            mtuReady = true
             enableNotifications(g)
-            ready.countDown()
+            maybeReady()
+        }
+
+        override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
+            Timber.d("GATT descriptor write confirmed: uuid=%s status=%d", descriptor.uuid, status)
+            cccdConfirmed++
+            maybeReady()
         }
 
         override fun onCharacteristicChanged(
@@ -56,11 +79,16 @@ class GattClientSync(
         ) {
             when (characteristic.uuid) {
                 BleProtocol.CHAR_MERKLE_QUERY -> BleProtocol.decodeAnswer(value)?.let {
-                    Timber.v("GATT answer: lo/hi/type resolved")
                     answerQueue.offer(it)
                 }
                 BleProtocol.CHAR_EVENT_FETCH -> eventStream.feed(value).forEach { eventQueue.offer(it) }
             }
+        }
+    }
+
+    private fun maybeReady() {
+        if (mtuReady && cccdConfirmed >= 2) {
+            ready.countDown()
         }
     }
 
@@ -87,11 +115,18 @@ class GattClientSync(
 
     private fun writeCccd(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic?) {
         characteristic ?: return
-        val descriptor = characteristic.getDescriptor(cccdUuid) ?: return
+        val descriptor = characteristic.getDescriptor(cccdUuid)
+        if (descriptor == null) {
+            Timber.w("GATT no CCCD descriptor for %s, counting as confirmed", characteristic.uuid)
+            cccdConfirmed++
+            return
+        }
         g.setCharacteristicNotification(characteristic, true)
         descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
         g.writeDescriptor(descriptor)
     }
+
+    private fun chunkSize(): Int = maxOf(20, mtu - 3)
 
     private fun write(characteristicUuid: UUID, payload: ByteArray) {
         val g = gatt ?: return
@@ -101,9 +136,10 @@ class GattClientSync(
     }
 
     private fun writeChunked(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, payload: ByteArray) {
+        val chunk = chunkSize()
         var offset = 0
         while (offset < payload.size) {
-            val end = minOf(offset + CHUNK_SIZE, payload.size)
+            val end = minOf(offset + chunk, payload.size)
             characteristic.value = payload.copyOfRange(offset, end)
             val ok = g.writeCharacteristic(characteristic)
             Timber.v("GATT write: char=%s ok=%s chunk=%d..%d", characteristic.uuid, ok, offset, end)
@@ -164,6 +200,6 @@ class GattClientSync(
 
     private companion object {
         const val TIMEOUT_SECONDS = 8L
-        const val CHUNK_SIZE = 509
+        const val DEFAULT_MTU = 23
     }
 }

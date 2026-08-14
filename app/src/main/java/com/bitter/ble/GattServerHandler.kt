@@ -121,6 +121,21 @@ class GattServerHandler(
                 gattServer.sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE, 0, null)
             }
         }
+
+        override fun onDescriptorWriteRequest(
+            device: BluetoothDevice,
+            requestId: Int,
+            descriptor: BluetoothGattDescriptor,
+            preparedWrite: Boolean,
+            responseNeeded: Boolean,
+            offset: Int,
+            value: ByteArray,
+        ) {
+            Timber.d("GATT CCCD descriptor write: device=%s uuid=%s", device.address, descriptor.uuid)
+            if (responseNeeded) {
+                gattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
+            }
+        }
     }
 
     private fun handleQuery(device: BluetoothDevice, payload: ByteArray) {
@@ -176,7 +191,7 @@ class GattServerHandler(
     }
 
     private fun notify(device: BluetoothDevice, characteristic: BluetoothGattCharacteristic, payload: ByteArray) {
-        val chunkSize = 200
+        val chunkSize = 180
         var offset = 0
         while (offset < payload.size) {
             val end = minOf(offset + chunkSize, payload.size)
