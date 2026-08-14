@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.bitter.ble.CollisionResolverTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:34:59" hostname="Akshats-MacBook-Air.local" time="0.001">
-  <properties/>
-  <testcase name="lower device id acts as client" classname="com.bitter.ble.CollisionResolverTest" time="0.001"/>
-  <testcase name="equal ids are not a client (both back off)" classname="com.bitter.ble.CollisionResolverTest" time="0.0"/>
-  <testcase name="comparison is unsigned across the 4 byte range" classname="com.bitter.ble.CollisionResolverTest" time="0.0"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>
