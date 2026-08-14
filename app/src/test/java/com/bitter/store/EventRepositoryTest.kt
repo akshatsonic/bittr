@@ -15,7 +15,7 @@ class EventRepositoryTest {
     private val fixedClock = { 1_700_000_000_000L }
 
     private fun repo(username: String = "alice", store: EventStore = InMemoryEventStore()) =
-        EventRepository(store, username, clock = fixedClock)
+        EventRepository(store, username, clock = fixedClock, dayKeyOf = { "2026-01-14" })
 
     @Test
     fun `post creates a valid authored post event`() = runTest {

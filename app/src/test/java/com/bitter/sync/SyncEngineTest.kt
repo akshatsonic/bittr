@@ -24,6 +24,7 @@ class SyncEngineTest {
         private val sorted = serverLeaves.sortedWith(Bytes)
         override val leafCount: Int get() = sorted.size
         override fun nodeHash(lo: Int, hi: Int): ByteArray = MerkleTree.rootOf(sorted.subList(lo, hi))
+        override fun leafAt(index: Int): ByteArray = sorted[index]
         override fun eventsForLeaves(leafHashes: List<ByteArray>): List<Event> = emptyList()
     }
 

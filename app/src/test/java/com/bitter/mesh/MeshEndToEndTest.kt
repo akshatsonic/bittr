@@ -9,9 +9,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
-class MeshEndToEndTest {
+private val clock = { 1_700_000_000_000L }
 
-    private val clock = { 1_700_000_000_000L }
+class MeshEndToEndTest {
 
     private class MeshNode(val deviceId: Int, val username: String) {
         val store = InMemoryEventStore()

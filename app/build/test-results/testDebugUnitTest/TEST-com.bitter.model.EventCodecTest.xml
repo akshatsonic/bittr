@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.bitter.model.EventCodecTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:25:15" hostname="Akshats-MacBook-Air.local" time="0.003">
+  <properties/>
+  <testcase name="event id is content addressed and matches known vector" classname="com.bitter.model.EventCodecTest" time="0.0"/>
+  <testcase name="wire decode recomputes id and signature rather than trusting them" classname="com.bitter.model.EventCodecTest" time="0.001"/>
+  <testcase name="content can hold the full 280 characters" classname="com.bitter.model.EventCodecTest" time="0.0"/>
+  <testcase name="verify rejects a tampered event" classname="com.bitter.model.EventCodecTest" time="0.0"/>
+  <testcase name="verify accepts an event with intact id and signature" classname="com.bitter.model.EventCodecTest" time="0.0"/>
+  <testcase name="id depends on all fields" classname="com.bitter.model.EventCodecTest" time="0.001"/>
+  <testcase name="wire codec round trips a like event with target" classname="com.bitter.model.EventCodecTest" time="0.0"/>
+  <testcase name="event signature matches known vector" classname="com.bitter.model.EventCodecTest" time="0.0"/>
+  <testcase name="wire decode returns null for garbage input" classname="com.bitter.model.EventCodecTest" time="0.0"/>
+  <testcase name="wire decode round trips empty content" classname="com.bitter.model.EventCodecTest" time="0.0"/>
+  <testcase name="wire codec round trips a post event" classname="com.bitter.model.EventCodecTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

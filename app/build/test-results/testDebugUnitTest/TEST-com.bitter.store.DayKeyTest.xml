@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.bitter.store.DayKeyTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:25:15" hostname="Akshats-MacBook-Air.local" time="0.002">
+  <properties/>
+  <testcase name="day key boundary splits at midnight" classname="com.bitter.store.DayKeyTest" time="0.0"/>
+  <testcase name="formats epoch millis as yyyy-MM-dd in a fixed zone" classname="com.bitter.store.DayKeyTest" time="0.0"/>
+  <testcase name="today is consistent with of for the same zone" classname="com.bitter.store.DayKeyTest" time="0.0"/>
+  <testcase name="same instant produces different day keys in different zones" classname="com.bitter.store.DayKeyTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

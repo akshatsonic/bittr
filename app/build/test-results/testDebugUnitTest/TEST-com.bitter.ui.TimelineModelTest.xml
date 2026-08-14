@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.bitter.ui.TimelineModelTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-08-14T05:25:16" hostname="Akshats-MacBook-Air.local" time="0.001">
+  <properties/>
+  <testcase name="multiple likes on the same post are all attached" classname="com.bitter.ui.TimelineModelTest" time="0.001"/>
+  <testcase name="likes attach to their parent post" classname="com.bitter.ui.TimelineModelTest" time="0.0"/>
+  <testcase name="posts render in chronological order" classname="com.bitter.ui.TimelineModelTest" time="0.0"/>
+  <testcase name="like on a missing parent is hidden until parent arrives" classname="com.bitter.ui.TimelineModelTest" time="0.0"/>
+  <testcase name="like becomes visible once parent syncs in" classname="com.bitter.ui.TimelineModelTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
