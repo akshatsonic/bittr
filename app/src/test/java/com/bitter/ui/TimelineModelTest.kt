@@ -19,9 +19,9 @@ class TimelineModelTest {
         Event.create(EventKind.UNLIKE, author, "", target, at)
 
     @Test
-    fun `posts render in chronological order`() {
+    fun `posts render newest first`() {
         val items = TimelineModel.build(listOf(post("a", "second", t0 + 1), post("a", "first", t0)))
-        assertEquals(listOf("first", "second"), items.map { it.post.content })
+        assertEquals(listOf("second", "first"), items.map { it.post.content })
     }
 
     @Test

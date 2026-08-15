@@ -17,7 +17,7 @@ object TimelineModel {
         displayNames: Map<String, String> = emptyMap(),
         myUsername: String? = null,
     ): List<TimelineItem> {
-        val posts = events.filter { it.kind == EventKind.POST }.sortedBy { it.createdAt }
+        val posts = events.filter { it.kind == EventKind.POST }.sortedByDescending { it.createdAt }
         val likesByTarget = events
             .filter { it.kind == EventKind.LIKE && it.targetEventId != null }
             .groupBy { it.targetEventId }
