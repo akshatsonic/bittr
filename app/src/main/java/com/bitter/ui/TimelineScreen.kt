@@ -35,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,9 +59,21 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     var fingerprintTarget by remember { mutableStateOf<FingerprintTarget?>(null) }
     var likesTarget by remember { mutableStateOf<LikesTarget?>(null) }
     var selectedTab by remember { mutableStateOf(0) }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                ) {
+                    focusManager.clearFocus()
+                    keyboard?.hide()
+                },
+        ) {
             Text(
                 text = "Bittr",
                 style = MaterialTheme.typography.headlineMedium,
