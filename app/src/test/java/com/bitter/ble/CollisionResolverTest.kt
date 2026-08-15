@@ -13,8 +13,21 @@ class CollisionResolverTest {
     }
 
     @Test
-    fun `equal ids are not a client (both back off)`() {
-        assertFalse(CollisionResolver.isClient(myDeviceId = 7, peerDeviceId = 7))
+    fun `equal ids fall back to nickname tie break`() {
+        assertTrue(CollisionResolver.isClient(7, 7, myNickname = "alice", peerNickname = "bob"))
+        assertFalse(CollisionResolver.isClient(7, 7, myNickname = "bob", peerNickname = "alice"))
+    }
+
+    @Test
+    fun `equal ids and equal nicknames are not a client`() {
+        assertFalse(CollisionResolver.isClient(7, 7, myNickname = "alice", peerNickname = "alice"))
+        assertFalse(CollisionResolver.isClient(7, 7))
+    }
+
+    @Test
+    fun `device id dominates the nickname tie break`() {
+        assertTrue(CollisionResolver.isClient(7, 8, myNickname = "z", peerNickname = "a"))
+        assertFalse(CollisionResolver.isClient(8, 7, myNickname = "a", peerNickname = "z"))
     }
 
     @Test

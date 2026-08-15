@@ -10,17 +10,31 @@ Bittr advertises:
 Room id is 0x0A. A "non-bittr advert" is any 0xFFFF manufacturer payload
 that isn't 22 bytes (other apps/OS services also use company id 0xFFFF).
 
-Usage: python3 scan_adverts.py [seconds]
+In addition to passive scanning, this script can connect over GATT to a
+Bittr device and inspect its GATT table to verify the GATT server side
+actually works. See --connect and --gatt.
+
+Usage:
+  python3 scan_adverts.py [seconds]
+  python3 scan_adverts.py --connect <address>
+  python3 scan_adverts.py --gatt [seconds]
 """
+import argparse
 import asyncio
 import sys
 
-from bleak import BleakScanner
+from bleak import BleakClient, BleakScanner
+from bleak.exc import BleakError
 
 ADVERT_COMPANY_ID = 0xFFFF
 NICKNAME_COMPANY_ID = 0xFFFE
 ROOM_ID = 0x0A
 PACKET_SIZE = 22
+
+SERVICE_UUID = "7b3e4c10-0000-1000-8000-00805f9b34fb"
+CHAR_MERKLE_QUERY_UUID = "7b3e4c10-0001-1000-8000-00805f9b34fb"
+CHAR_EVENT_FETCH_UUID = "7b3e4c10-0002-1000-8000-00805f9b34fb"
+CHAR_IDENTITY_UUID = "7b3e4c10-0003-1000-8000-00805f9b34fb"
 
 
 def fmt_device_id(device_id: int) -> str:
@@ -86,7 +100,8 @@ def detection_callback(device, advertisement_data):
             )
 
 
-async def main(seconds: float):
+async def scan(seconds: float):
+    """Run a passive scan for `seconds` seconds, printing detected adverts."""
     print(f"Scanning for {seconds}s ...")
     scanner = BleakScanner(detection_callback=detection_callback)
     await scanner.start()
@@ -95,6 +110,128 @@ async def main(seconds: float):
     print("Done.")
 
 
+async def find_first_bittr(seconds: float):
+    """Scan until the first Bittr device is seen (or `seconds` elapse).
+
+    Returns the device address of the first detected Bittr device, or None.
+    """
+    found = []
+
+    def cb(device, advertisement_data):
+        msd = advertisement_data.manufacturer_data
+        packet = msd.get(ADVERT_COMPANY_ID)
+        if packet is None:
+            return
+        adv = decode_advert(packet)
+        if adv is not None and adv["roomId"] == ROOM_ID and not found:
+            found.append(device.address)
+
+    print(f"Scanning for a Bittr device ({seconds}s) ...")
+    scanner = BleakScanner(detection_callback=cb)
+    await scanner.start()
+    await asyncio.sleep(seconds)
+    await scanner.stop()
+
+    if not found:
+        print("No Bittr device detected.")
+        return None
+    address = found[0]
+    print(f"Detected Bittr device: {address}")
+    return address
+
+
+async def list_gatt(client: BleakClient):
+    """Log every GATT service and characteristic exposed by the device."""
+    services = await client.get_services()
+    print(f"\nGATT services on {client.address}:")
+    for service in services:
+        print(f"  service {service.uuid}")
+        for char in service.characteristics:
+            props = ",".join(char.properties) if char.properties else "(none)"
+            print(f"    char {char.uuid}  props=[{props}]")
+    print()
+
+
+async def read_identity(client: BleakClient):
+    """Read CHAR_IDENTITY (read-only) and print the UTF-8 username."""
+    try:
+        data = await client.read_gatt_char(CHAR_IDENTITY_UUID)
+    except BleakError as exc:
+        print(f"  identity characteristic not found / unreadable: {exc}")
+        return
+    print(f"  CHAR_IDENTITY raw bytes ({len(data)}): {data.hex()}")
+    try:
+        username = data.decode("utf-8")
+    except UnicodeDecodeError:
+        print(f"  username (utf-8 decode failed): {data!r}")
+        return
+    print(f"  username: {username!r}")
+
+
+async def connect_and_inspect(address: str):
+    """Connect to `address` over GATT, dump services, and read identity."""
+    print(f"Connecting to {address} ...")
+    client = BleakClient(address, timeout=15.0)
+    try:
+        await client.connect()
+    except BleakError as exc:
+        print(f"  connect failed: {exc}")
+        print("  (device may be out of range, not connectable, or the address is wrong)")
+        return
+    except asyncio.TimeoutError:
+        print("  connect timed out.")
+        return
+
+    print(f"Connected: {client.is_connected}")
+
+    try:
+        await list_gatt(client)
+        await read_identity(client)
+    except BleakError as exc:
+        print(f"  GATT error: {exc}")
+    finally:
+        await client.disconnect()
+        print("Disconnected.")
+
+
+async def main(args):
+    if args.connect:
+        await connect_and_inspect(args.connect)
+        return
+
+    if args.gatt:
+        address = await find_first_bittr(args.seconds)
+        if address is None:
+            return
+        await connect_and_inspect(address)
+        return
+
+    await scan(args.seconds)
+
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser(
+        description="Scan Bittr BLE adverts and/or inspect a device's GATT table."
+    )
+    parser.add_argument(
+        "seconds",
+        nargs="?",
+        type=float,
+        default=15.0,
+        help="scan duration in seconds (default 15)",
+    )
+    parser.add_argument(
+        "--connect",
+        metavar="ADDRESS",
+        help="connect to a specific BLE address and inspect its GATT table",
+    )
+    parser.add_argument(
+        "--gatt",
+        action="store_true",
+        help="scan for a Bittr device then connect to the first one found",
+    )
+    return parser.parse_args(argv)
+
+
 if __name__ == "__main__":
-    dur = float(sys.argv[1]) if len(sys.argv) > 1 else 15.0
-    asyncio.run(main(dur))
+    asyncio.run(main(parse_args(sys.argv[1:])))

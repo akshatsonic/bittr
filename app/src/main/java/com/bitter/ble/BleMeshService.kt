@@ -33,6 +33,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 import timber.log.Timber
 
 class BleMeshService : Service() {
@@ -146,7 +147,7 @@ class BleMeshService : Service() {
         if (meshLoopRunning) return
         meshLoopRunning = true
         scope.launch {
-            val offset = initialPhaseOffsetMs(graph.deviceId)
+            val offset = initialPhaseOffsetMs()
             Timber.d("MESH loop: alternate advertise/scan every %d ms (phase offset=%d ms)", PHASE_MS, offset)
             delay(offset)
             while (isActive) {
@@ -160,8 +161,7 @@ class BleMeshService : Service() {
         }
     }
 
-    private fun initialPhaseOffsetMs(deviceId: Int): Long =
-        (deviceId.toLong() and 0xFFFFFFFFL) % PHASE_MS
+    private fun initialPhaseOffsetMs(): Long = Random.nextLong(0, PHASE_MS)
 
     private fun doStartAdvertising(graph: AppGraph) {
         val adv = advertiser ?: return
@@ -245,29 +245,36 @@ class BleMeshService : Service() {
         val graph = (application as BitterApplication).graph
         val myId = graph.deviceId
         val rootMatches = currentServer.truncatedRoot().contentEquals(packet.merkleRoot)
-        val iAmClient = CollisionResolver.isClient(myId, packet.deviceId)
 
         val nicknamePayload = record.getManufacturerSpecificData(BleProtocol.NICKNAME_COMPANY_ID)
-        val nickname = NicknamePacket.decode(nicknamePayload)?.nickname
+        val peerNickname = NicknamePacket.decode(nicknamePayload)?.nickname
             ?: graph.nicknames.nicknameFor(packet.deviceId)
+            ?: ""
+        val iAmClient = CollisionResolver.isClient(
+            myId,
+            packet.deviceId,
+            graph.ownNickname.value,
+            peerNickname,
+        )
 
         Timber.v("SCAN peer=%s rssi=%d peerId=%08x myId=%08x rootMatch=%s iAmClient=%s nickname=%s",
-            device.address, result.rssi, packet.deviceId, myId, rootMatches, iAmClient, nickname)
+            device.address, result.rssi, packet.deviceId, myId, rootMatches, iAmClient, peerNickname)
 
         seenDevices.add(device.address)
         scope.launch {
             graph.meshStatus.upsertPeer(
                 PeerInfo(
                     deviceId = packet.deviceId,
-                    nickname = nickname,
+                    nickname = peerNickname,
                     address = device.address,
                     rssi = result.rssi,
                     rootMatches = rootMatches,
                 ),
             )
         }
-        nickname?.let { scope.launch { graph.nicknames.recordNickname(packet.deviceId, it) } }
-
+        peerNickname.takeIf { it.isNotEmpty() }?.let {
+            scope.launch { graph.nicknames.recordNickname(packet.deviceId, it) }
+        }
         if (rootMatches) return
         if (!iAmClient) return
         if (device.address in syncingDevices) return
