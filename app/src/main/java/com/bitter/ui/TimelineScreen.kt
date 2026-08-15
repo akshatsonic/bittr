@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -30,6 +31,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +46,7 @@ import com.bitter.log.LogEntry
 import com.bitter.log.LogStore
 import com.bitter.mesh.PeerInfo
 import com.bitter.model.Event
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -59,8 +62,10 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     var fingerprintTarget by remember { mutableStateOf<FingerprintTarget?>(null) }
     var likesTarget by remember { mutableStateOf<LikesTarget?>(null) }
     var selectedTab by remember { mutableStateOf(0) }
+    val listState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -101,6 +106,7 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
             if (selectedTab == 0) {
                 TimelineTab(
                     items = items,
+                    listState = listState,
                     meshState = meshState,
                     ownNickname = ownNickname,
                     panelExpanded = panelExpanded,
@@ -117,6 +123,7 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                         if (content.isNotEmpty()) {
                             viewModel.post(content)
                             draft = ""
+                            scope.launch { listState.animateScrollToItem(0) }
                         }
                     },
                     onLike = { item ->
@@ -175,6 +182,7 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
 @Composable
 private fun TimelineTab(
     items: List<TimelineItem>,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     meshState: com.bitter.mesh.MeshStatus,
     ownNickname: String,
     panelExpanded: Boolean,
@@ -196,6 +204,7 @@ private fun TimelineTab(
             onNicknameChange = onNicknameChange,
         )
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
