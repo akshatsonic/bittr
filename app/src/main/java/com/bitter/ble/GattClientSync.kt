@@ -54,6 +54,9 @@ class GattClientSync(
 
     private val cccdQueue = ArrayDeque<BluetoothGattCharacteristic>()
 
+    @Volatile
+    private var writeLatch = CountDownLatch(0)
+
     private val cccdUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
     private val callback = object : BluetoothGattCallback() {
@@ -132,8 +135,16 @@ class GattClientSync(
             }
             identityLatch.countDown()
         }
-    }
 
+        override fun onCharacteristicWrite(
+            g: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int,
+        ) {
+            Timber.v("GATT write confirmed: char=%s status=%d", characteristic.uuid, status)
+            writeLatch.countDown()
+        }
+    }
     private fun maybeReady() {
         if (mtuReady && cccdTarget > 0 && cccdCompleted >= cccdTarget) {
             ready.countDown()
@@ -221,9 +232,11 @@ class GattClientSync(
         while (offset < payload.size) {
             val end = minOf(offset + chunk, payload.size)
             characteristic.value = payload.copyOfRange(offset, end)
+            writeLatch = CountDownLatch(1)
             val ok = g.writeCharacteristic(characteristic)
             Timber.v("GATT write: char=%s ok=%s chunk=%d..%d", characteristic.uuid, ok, offset, end)
             if (!ok) break
+            writeLatch.await(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             offset = end
         }
     }
@@ -293,6 +306,7 @@ class GattClientSync(
 
     private companion object {
         const val TIMEOUT_SECONDS = 8L
+        const val WRITE_TIMEOUT_SECONDS = 8L
         const val DEFAULT_MTU = 23
         const val MTU_TIMEOUT_MS = 2_000L
     }

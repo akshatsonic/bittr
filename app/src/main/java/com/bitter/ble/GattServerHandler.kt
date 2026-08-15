@@ -12,6 +12,11 @@ import android.content.Context
 import com.bitter.model.Event
 import com.bitter.model.EventWireCodec
 import com.bitter.sync.LocalSyncServer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.UUID
 
@@ -24,6 +29,8 @@ class GattServerHandler(
 ) {
     private val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val gattServer: BluetoothGattServer by lazy { manager.openGattServer(context, callback) }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val writeStreams = mutableMapOf<String, FrameStream>()
 
@@ -158,11 +165,11 @@ class GattServerHandler(
         when (val query = BleProtocol.decodeQuery(payload)) {
             is BleProtocol.Query.NodeHash -> {
                 val hash = peer.nodeHash(query.lo, query.hi)
-                notify(device, characteristic, BleProtocol.encodeNodeHashAnswer(query.lo, query.hi, hash))
+                scope.launch { notify(device, characteristic, BleProtocol.encodeNodeHashAnswer(query.lo, query.hi, hash)) }
             }
             BleProtocol.Query.LeafCount -> {
                 Timber.d("GATT leafCount query answered: %d", peer.leafCount)
-                notify(device, characteristic, BleProtocol.encodeLeafCountAnswer(peer.leafCount))
+                scope.launch { notify(device, characteristic, BleProtocol.encodeLeafCountAnswer(peer.leafCount)) }
             }
             BleProtocol.Query.AllEvents -> {
                 Timber.d("GATT all-events query: streaming %d events", peer.allEvents().size)
@@ -203,21 +210,39 @@ class GattServerHandler(
     private fun streamEvents(device: BluetoothDevice, events: List<Event>) {
         val characteristic = gattServer.getService(BleProtocol.SERVICE_UUID)
             ?.getCharacteristic(BleProtocol.CHAR_EVENT_FETCH) ?: return
-        for (event in events) {
-            val frame = FrameCodec.encode(BleProtocol.encodeEventStream(EventWireCodec.encode(event)))
-            notify(device, characteristic, frame)
+        scope.launch {
+            for (event in events) {
+                val frame = FrameCodec.encode(BleProtocol.encodeEventStream(EventWireCodec.encode(event)))
+                notify(device, characteristic, frame)
+            }
+            notify(device, characteristic, FrameCodec.encode(byteArrayOf()))
         }
-        notify(device, characteristic, FrameCodec.encode(byteArrayOf()))
     }
 
-    private fun notify(device: BluetoothDevice, characteristic: BluetoothGattCharacteristic, payload: ByteArray) {
+    private suspend fun notify(device: BluetoothDevice, characteristic: BluetoothGattCharacteristic, payload: ByteArray) {
         val chunkSize = 180
         var offset = 0
         while (offset < payload.size) {
             val end = minOf(offset + chunkSize, payload.size)
             characteristic.value = payload.copyOfRange(offset, end)
-            gattServer.notifyCharacteristicChanged(device, characteristic, false)
+            var sent = gattServer.notifyCharacteristicChanged(device, characteristic, false)
+            var attempts = 0
+            while (!sent && attempts < 5) {
+                delay(NOTIFY_RETRY_MS)
+                sent = gattServer.notifyCharacteristicChanged(device, characteristic, false)
+                attempts++
+            }
+            if (!sent) {
+                Timber.w("GATT notify failed after retries for device=%s", device.address)
+                return
+            }
             offset = end
+            delay(NOTIFY_INTERVAL_MS)
         }
+    }
+
+    private companion object {
+        const val NOTIFY_INTERVAL_MS = 20L
+        const val NOTIFY_RETRY_MS = 50L
     }
 }
