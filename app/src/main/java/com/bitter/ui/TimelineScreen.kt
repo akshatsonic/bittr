@@ -34,12 +34,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.bitter.log.LogEntry
 import com.bitter.log.LogStore
 import com.bitter.mesh.PeerInfo
+import com.bitter.model.Event
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -91,7 +93,11 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                     onTogglePanel = { panelExpanded = !panelExpanded },
                     onNicknameChange = viewModel::setNickname,
                     draft = draft,
-                    onDraftChange = { draft = it.take(280) },
+                    onDraftChange = { newValue ->
+                        if (newValue.length <= Event.MAX_CONTENT_LENGTH) {
+                            draft = newValue
+                        }
+                    },
                     onPost = {
                         val content = draft.trim()
                         if (content.isNotEmpty()) {
@@ -203,10 +209,32 @@ private fun TimelineTab(
                 placeholder = { Text("What's happening?") },
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Button(onClick = onPost) {
+            Button(
+                onClick = onPost,
+                enabled = draft.isNotBlank(),
+            ) {
                 Text("Post")
             }
         }
+        val remaining = Event.MAX_CONTENT_LENGTH - draft.length
+        Text(
+            text = "$remaining",
+            style = MaterialTheme.typography.labelSmall,
+            color = charCountColor(remaining),
+            modifier = Modifier
+                .align(Alignment.End)
+                .padding(top = 2.dp),
+        )
+    }
+}
+
+private fun charCountColor(remaining: Int): Color {
+    val ratio = remaining.toFloat() / Event.MAX_CONTENT_LENGTH
+    return when {
+        remaining <= 0 -> Color(0xFFD32F2F)
+        remaining < 10 -> Color(0xFFD32F2F)
+        ratio > 0.5f -> lerp(Color(0xFFF9A825), Color(0xFF2E7D32), (ratio - 0.5f) * 2f)
+        else -> lerp(Color(0xFFD32F2F), Color(0xFFF9A825), ratio * 2f)
     }
 }
 
