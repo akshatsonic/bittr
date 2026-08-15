@@ -146,7 +146,9 @@ class BleMeshService : Service() {
         if (meshLoopRunning) return
         meshLoopRunning = true
         scope.launch {
-            Timber.d("MESH loop starting: alternate advertise/scan every %d ms", PHASE_MS)
+            val offset = initialPhaseOffsetMs(graph.deviceId)
+            Timber.d("MESH loop: alternate advertise/scan every %d ms (phase offset=%d ms)", PHASE_MS, offset)
+            delay(offset)
             while (isActive) {
                 doStartAdvertising(graph)
                 delay(PHASE_MS)
@@ -157,6 +159,9 @@ class BleMeshService : Service() {
             }
         }
     }
+
+    private fun initialPhaseOffsetMs(deviceId: Int): Long =
+        (deviceId.toLong() and 0xFFFFFFFFL) % PHASE_MS
 
     private fun doStartAdvertising(graph: AppGraph) {
         val adv = advertiser ?: return
