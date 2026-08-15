@@ -3,6 +3,7 @@ package com.bitter.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.bitter.log.LogStore
 import com.bitter.mesh.MeshStatus
 import com.bitter.mesh.MeshStatusStore
 import com.bitter.mesh.NicknameRegistry
@@ -21,9 +22,12 @@ class TimelineViewModel(
     private val meshStatus: MeshStatusStore,
     val ownNickname: StateFlow<String>,
     private val setOwnNickname: (String) -> Unit,
+    private val logStore: LogStore,
 ) : ViewModel() {
 
     val meshState: StateFlow<MeshStatus> = meshStatus.status
+
+    val logEntries: StateFlow<List<com.bitter.log.LogEntry>> = logStore.entries
 
     val displayNames: StateFlow<Map<String, String>> = combine(
         nicknames.displayNames,
@@ -55,6 +59,10 @@ class TimelineViewModel(
         setOwnNickname(nickname)
     }
 
+    fun clearLogs() {
+        logStore.clear()
+    }
+
     fun fingerprintFor(username: String): Int? =
         if (username == this.username) deviceId else nicknames.deviceIdFor(username)
 }
@@ -67,6 +75,7 @@ class TimelineViewModelFactory(
     private val meshStatus: MeshStatusStore,
     private val ownNickname: StateFlow<String>,
     private val setOwnNickname: (String) -> Unit,
+    private val logStore: LogStore,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -78,5 +87,6 @@ class TimelineViewModelFactory(
             meshStatus,
             ownNickname,
             setOwnNickname,
+            logStore,
         ) as T
 }

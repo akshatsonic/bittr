@@ -4,6 +4,7 @@ import android.content.Context
 import android.provider.Settings
 import androidx.room.Room
 import com.bitter.crypto.IdentityDerivation
+import com.bitter.log.LogStore
 import com.bitter.mesh.MeshCoordinator
 import com.bitter.mesh.MeshStatusStore
 import com.bitter.mesh.NicknameRegistry
@@ -35,6 +36,8 @@ class AppGraph(context: Context) {
     val nicknames: NicknameRegistry = NicknameRegistry()
 
     val meshStatus: MeshStatusStore = MeshStatusStore()
+
+    val logStore: LogStore = LogStore()
 
     val database: BitterDatabase =
         Room.databaseBuilder(context, BitterDatabase::class.java, "bitter.db").build()

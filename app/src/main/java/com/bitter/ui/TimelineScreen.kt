@@ -21,6 +21,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,8 +33,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.bitter.log.LogEntry
+import com.bitter.log.LogStore
 import com.bitter.mesh.PeerInfo
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -43,10 +49,12 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     val items by viewModel.items.collectAsState()
     val meshState by viewModel.meshState.collectAsState()
     val ownNickname by viewModel.ownNickname.collectAsState()
+    val logEntries by viewModel.logEntries.collectAsState()
     var draft by remember { mutableStateOf("") }
     var panelExpanded by remember { mutableStateOf(false) }
     var fingerprintTarget by remember { mutableStateOf<FingerprintTarget?>(null) }
     var likesTarget by remember { mutableStateOf<LikesTarget?>(null) }
+    var selectedTab by remember { mutableStateOf(0) }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -61,70 +69,63 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.width(8.dp))
-            MeshStatusPanel(
-                meshState = meshState,
-                ownNickname = ownNickname,
-                expanded = panelExpanded,
-                onToggle = { panelExpanded = !panelExpanded },
-                onNicknameChange = viewModel::setNickname,
-            )
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(items, key = { it.post.id }) { item ->
-                    PostCard(
-                        item = item,
-                        onLike = {
-                            if (item.likedByMe) {
-                                viewModel.unlike(item.post.id)
-                            } else {
-                                viewModel.like(item.post.id)
-                            }
-                        },
-                        onShowLikers = {
-                            likesTarget = LikesTarget(
-                                postId = item.post.id,
-                                likers = item.displayLikes.map { it.author },
-                                usernames = item.likes.map { it.author },
-                            )
-                        },
-                        onFingerprint = { username ->
-                            fingerprintTarget = FingerprintTarget(
-                                displayName = viewModel.displayNames.value[username] ?: username,
-                                username = username,
-                                deviceId = viewModel.fingerprintFor(username),
-                            )
-                        },
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedTextField(
-                    value = draft,
-                    onValueChange = { draft = it.take(280) },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("What's happening?") },
+            TabRow(selectedTabIndex = selectedTab) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { Text("Timeline") },
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(
-                    onClick = {
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = { Text("Logs") },
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            if (selectedTab == 0) {
+                TimelineTab(
+                    items = items,
+                    meshState = meshState,
+                    ownNickname = ownNickname,
+                    panelExpanded = panelExpanded,
+                    onTogglePanel = { panelExpanded = !panelExpanded },
+                    onNicknameChange = viewModel::setNickname,
+                    draft = draft,
+                    onDraftChange = { draft = it.take(280) },
+                    onPost = {
                         val content = draft.trim()
                         if (content.isNotEmpty()) {
                             viewModel.post(content)
                             draft = ""
                         }
                     },
-                ) {
-                    Text("Post")
-                }
+                    onLike = { item ->
+                        if (item.likedByMe) {
+                            viewModel.unlike(item.post.id)
+                        } else {
+                            viewModel.like(item.post.id)
+                        }
+                    },
+                    onShowLikers = { item ->
+                        likesTarget = LikesTarget(
+                            postId = item.post.id,
+                            likers = item.displayLikes.map { it.author },
+                            usernames = item.likes.map { it.author },
+                        )
+                    },
+                    onFingerprint = { username ->
+                        fingerprintTarget = FingerprintTarget(
+                            displayName = viewModel.displayNames.value[username] ?: username,
+                            username = username,
+                            deviceId = viewModel.fingerprintFor(username),
+                        )
+                    },
+                )
+            } else {
+                LogsTab(
+                    entries = logEntries,
+                    onClear = viewModel::clearLogs,
+                )
             }
         }
     }
@@ -147,6 +148,129 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                 )
             },
             onDismiss = { likesTarget = null },
+        )
+    }
+}
+
+@Composable
+private fun TimelineTab(
+    items: List<TimelineItem>,
+    meshState: com.bitter.mesh.MeshStatus,
+    ownNickname: String,
+    panelExpanded: Boolean,
+    onTogglePanel: () -> Unit,
+    onNicknameChange: (String) -> Unit,
+    draft: String,
+    onDraftChange: (String) -> Unit,
+    onPost: () -> Unit,
+    onLike: (TimelineItem) -> Unit,
+    onShowLikers: (TimelineItem) -> Unit,
+    onFingerprint: (String) -> Unit,
+) {
+    Column {
+        MeshStatusPanel(
+            meshState = meshState,
+            ownNickname = ownNickname,
+            expanded = panelExpanded,
+            onToggle = onTogglePanel,
+            onNicknameChange = onNicknameChange,
+        )
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(items, key = { it.post.id }) { item ->
+                PostCard(
+                    item = item,
+                    onLike = { onLike(item) },
+                    onShowLikers = { onShowLikers(item) },
+                    onFingerprint = onFingerprint,
+                )
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = draft,
+                onValueChange = onDraftChange,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("What's happening?") },
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(onClick = onPost) {
+                Text("Post")
+            }
+        }
+    }
+}
+
+@Composable
+private fun LogsTab(entries: List<LogEntry>, onClear: () -> Unit) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "${entries.size} log line${if (entries.size == 1) "" else "s"}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onClear) {
+                Text("Clear")
+            }
+        }
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            items(entries.asReversed(), key = { entry ->
+                "${entry.timestamp}-${entry.priority}-${entry.tag}-${entry.message.hashCode()}"
+            }) { entry ->
+                LogRow(entry)
+            }
+        }
+    }
+}
+
+private fun priorityChar(priority: Int): Char = when (priority) {
+    LogStore.VERBOSE -> 'V'
+    LogStore.DEBUG -> 'D'
+    LogStore.INFO -> 'I'
+    LogStore.WARN -> 'W'
+    LogStore.ERROR -> 'E'
+    else -> '?'
+}
+
+@Composable
+private fun LogRow(entry: LogEntry) {
+    val color = when (entry.priority) {
+        LogStore.ERROR -> MaterialTheme.colorScheme.error
+        LogStore.WARN -> Color(0xFFB26A00)
+        LogStore.INFO -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "[${priorityChar(entry.priority)}] ${entry.tag} @ ${entry.timestamp}",
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            fontFamily = FontFamily.Monospace,
+        )
+        Text(
+            text = entry.message,
+            style = MaterialTheme.typography.bodySmall,
+            color = color,
+            fontFamily = FontFamily.Monospace,
         )
     }
 }

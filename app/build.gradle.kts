@@ -99,6 +99,7 @@ val jacocoTestReport = tasks.register<JacocoReport>("jacocoTestReport") {
         "com/bitter/store/EventRepository*",
         "com/bitter/store/InMemoryEventStore*",
         "com/bitter/mesh/**",
+        "com/bitter/log/**",
         "com/bitter/ui/TimelineModel*",
     )
 
@@ -115,6 +116,7 @@ val jacocoTestReport = tasks.register<JacocoReport>("jacocoTestReport") {
             "src/main/java/com/bitter/sync",
             "src/main/java/com/bitter/store",
             "src/main/java/com/bitter/mesh",
+            "src/main/java/com/bitter/log",
             "src/main/java/com/bitter/ui",
         ),
     )

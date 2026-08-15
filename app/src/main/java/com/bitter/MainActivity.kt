@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity() {
                             meshStatus = graph.meshStatus,
                             ownNickname = graph.ownNickname,
                             setOwnNickname = graph::setOwnNickname,
+                            logStore = graph.logStore,
                         ),
                     ),
                 )
