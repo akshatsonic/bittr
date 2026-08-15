@@ -32,13 +32,32 @@ class MeshStatusStoreTest {
     }
 
     @Test
-    fun `peer is upserted by address`() = runTest {
+    fun `peer is upserted by deviceId`() = runTest {
         val s = store()
         s.upsertPeer(PeerInfo(0x01020304, "alice", "aa:bb", -50, rootMatches = false))
         s.upsertPeer(PeerInfo(0x01020304, "alice", "aa:bb", -60, rootMatches = true))
         assertEquals(1, s.status().peers.size)
         assertEquals(-60, s.status().peers.single().rssi)
         assertEquals(true, s.status().peers.single().rootMatches)
+    }
+
+    @Test
+    fun `same deviceId with different addresses is deduplicated`() = runTest {
+        val s = store()
+        s.upsertPeer(PeerInfo(0x01020304, "alice", "aa:bb", -50, rootMatches = false))
+        s.upsertPeer(PeerInfo(0x01020304, "alice", "cc:dd", -60, rootMatches = false))
+        s.upsertPeer(PeerInfo(0x01020304, "alice", "ee:ff", -70, rootMatches = false))
+        assertEquals(1, s.status().peers.size)
+        assertEquals("ee:ff", s.status().peers.single().address)
+        assertEquals(-70, s.status().peers.single().rssi)
+    }
+
+    @Test
+    fun `different deviceIds with same address are both kept`() = runTest {
+        val s = store()
+        s.upsertPeer(PeerInfo(0x01020304, "alice", "aa:bb", -50, rootMatches = false))
+        s.upsertPeer(PeerInfo(0x05060708, "bob", "aa:bb", -60, rootMatches = false))
+        assertEquals(2, s.status().peers.size)
     }
 
     @Test

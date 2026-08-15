@@ -54,9 +54,6 @@ class BleMeshService : Service() {
     private val syncingDevices = mutableSetOf<String>()
 
     @Volatile
-    private var advertising = false
-
-    @Volatile
     private var scanning = false
 
     @Volatile
@@ -65,13 +62,11 @@ class BleMeshService : Service() {
     private val advertiseCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
             Timber.d("ADVERTISE started ok (mode=%d)", settingsInEffect.mode)
-            advertising = true
             graph.meshStatus.setAdvertising(true)
         }
 
         override fun onStartFailure(errorCode: Int) {
             Timber.w("ADVERTISE failed: errorCode=%d", errorCode)
-            advertising = false
             graph.meshStatus.setAdvertising(false)
         }
     }
@@ -148,14 +143,13 @@ class BleMeshService : Service() {
         meshLoopRunning = true
         scope.launch {
             val offset = initialPhaseOffsetMs()
-            Timber.d("MESH loop: alternate advertise/scan every %d ms (phase offset=%d ms)", PHASE_MS, offset)
+            Timber.d("MESH loop: advertise continuously, scan %d ms of every %d ms (offset=%d ms)", SCAN_WINDOW_MS, PHASE_MS, offset)
             delay(offset)
             while (isActive) {
                 doStartAdvertising(graph)
                 delay(PHASE_MS)
-                stopAdvertising()
                 startScanning()
-                delay(PHASE_MS)
+                delay(SCAN_WINDOW_MS)
                 stopScanning()
             }
         }
@@ -205,7 +199,6 @@ class BleMeshService : Service() {
 
     private fun stopAdvertising() {
         advertiser?.stopAdvertising(advertiseCallback)
-        advertising = false
         graph.meshStatus.setAdvertising(false)
     }
 
@@ -328,5 +321,6 @@ class BleMeshService : Service() {
     private companion object {
         const val NOTIFICATION_ID = 1
         const val PHASE_MS = 3_000L
+        const val SCAN_WINDOW_MS = 1_500L
     }
 }

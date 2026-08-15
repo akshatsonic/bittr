@@ -46,9 +46,9 @@ class MeshStatusStore(
             val now = clock()
             val seen = if (peer.lastSeenAt == 0L) peer.copy(lastSeenAt = now) else peer
             val alive = _status.value.peers.filter { now - it.lastSeenAt < PEER_TTL_MS }
-            val withoutAddress = alive.filter { it.address != seen.address }
-            val updated = withoutAddress + seen
-            _status.value = _status.value.copy(peers = updated.sortedBy { it.address })
+            val withoutDevice = alive.filter { it.deviceId != seen.deviceId }
+            val updated = withoutDevice + seen
+            _status.value = _status.value.copy(peers = updated.sortedBy { it.deviceId })
         }
     }
 
