@@ -26,6 +26,12 @@ class EventRepository(
         return event
     }
 
+    suspend fun unlike(targetEventId: String): Event {
+        val event = Event.create(EventKind.UNLIKE, username, "", targetEventId, clock())
+        store.insertAll(listOf(event), dayKeyOf(event.createdAt))
+        return event
+    }
+
     suspend fun applyRemote(events: List<Event>): Int {
         val valid = events.filter { Event.verify(it) }
         var inserted = 0

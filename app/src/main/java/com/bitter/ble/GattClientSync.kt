@@ -24,6 +24,10 @@ class GattClientSync(
     private val eventQueue = LinkedBlockingQueue<ByteArray>()
     private val eventStream = FrameStream()
     private val ready = CountDownLatch(1)
+    private val identityLatch = CountDownLatch(1)
+
+    @Volatile
+    private var peerUsername: String? = null
 
     @Volatile
     private var gatt: BluetoothGatt? = null
@@ -84,6 +88,17 @@ class GattClientSync(
                 BleProtocol.CHAR_EVENT_FETCH -> eventStream.feed(value).forEach { eventQueue.offer(it) }
             }
         }
+
+        override fun onCharacteristicRead(
+            g: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int,
+        ) {
+            if (characteristic.uuid == BleProtocol.CHAR_IDENTITY && status == BluetoothGatt.GATT_SUCCESS) {
+                peerUsername = characteristic.value?.toString(Charsets.UTF_8)
+            }
+            identityLatch.countDown()
+        }
     }
 
     private fun maybeReady() {
@@ -100,6 +115,23 @@ class GattClientSync(
     }
 
     fun awaitReady(timeoutMs: Long): Boolean = ready.await(timeoutMs, TimeUnit.MILLISECONDS)
+
+    fun readIdentity(timeoutMs: Long = TIMEOUT_SECONDS * 1000): String? {
+        val g = gatt ?: return null
+        val service = g.getService(BleProtocol.SERVICE_UUID) ?: return null
+        val characteristic = service.getCharacteristic(BleProtocol.CHAR_IDENTITY) ?: return null
+        val ok = g.readCharacteristic(characteristic)
+        if (!ok) return null
+        identityLatch.await(timeoutMs, TimeUnit.MILLISECONDS)
+        return peerUsername
+    }
+
+    fun writeIdentity(deviceId: Int, username: String) {
+        write(
+            BleProtocol.CHAR_IDENTITY,
+            BleProtocol.encodeIdentityAnnounce(deviceId, username),
+        )
+    }
 
     fun close() {
         gatt?.disconnect()

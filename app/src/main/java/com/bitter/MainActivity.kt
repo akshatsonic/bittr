@@ -31,7 +31,15 @@ class MainActivity : ComponentActivity() {
             BitterTheme {
                 TimelineScreen(
                     viewModel = viewModel(
-                        factory = TimelineViewModelFactory(graph.repository, graph.username),
+                        factory = TimelineViewModelFactory(
+                            repository = graph.repository,
+                            username = graph.username,
+                            deviceId = graph.deviceId,
+                            nicknames = graph.nicknames,
+                            meshStatus = graph.meshStatus,
+                            ownNickname = graph.ownNickname,
+                            setOwnNickname = graph::setOwnNickname,
+                        ),
                     ),
                 )
             }

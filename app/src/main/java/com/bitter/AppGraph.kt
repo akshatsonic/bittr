@@ -5,10 +5,14 @@ import android.provider.Settings
 import androidx.room.Room
 import com.bitter.crypto.IdentityDerivation
 import com.bitter.mesh.MeshCoordinator
+import com.bitter.mesh.MeshStatusStore
+import com.bitter.mesh.NicknameRegistry
 import com.bitter.store.EventRepository
 import com.bitter.store.EventStore
 import com.bitter.store.db.BitterDatabase
 import com.bitter.store.db.RoomEventStore
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlin.random.Random
 
 class AppGraph(context: Context) {
@@ -22,6 +26,16 @@ class AppGraph(context: Context) {
             prefs.edit().putString("username", it).apply()
         }
 
+    private val nickPref: String = prefs.getString("nickname", null)
+        ?: username.also { prefs.edit().putString("nickname", it).apply() }
+
+    private val _ownNickname = MutableStateFlow(nickPref)
+    val ownNickname: StateFlow<String> = _ownNickname
+
+    val nicknames: NicknameRegistry = NicknameRegistry()
+
+    val meshStatus: MeshStatusStore = MeshStatusStore()
+
     val database: BitterDatabase =
         Room.databaseBuilder(context, BitterDatabase::class.java, "bitter.db").build()
 
@@ -30,6 +44,12 @@ class AppGraph(context: Context) {
     val repository: EventRepository = EventRepository(store, username)
 
     val coordinator: MeshCoordinator = MeshCoordinator(repository, deviceId)
+
+    fun setOwnNickname(nickname: String) {
+        val normalized = nickname.trim().take(NicknameRegistry.MAX_NICKNAME_CHARS)
+        prefs.edit().putString("nickname", normalized).apply()
+        _ownNickname.value = normalized
+    }
 
     private fun loadOrCreateDeviceId(): Int {
         val existing = prefs.getInt("deviceId", -1)

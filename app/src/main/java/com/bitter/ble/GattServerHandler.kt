@@ -20,6 +20,7 @@ class GattServerHandler(
     private val serverProvider: () -> LocalSyncServer,
     private val username: String,
     private val onPushEvents: (List<Event>) -> Unit,
+    private val onPeerIdentity: (Int, String) -> Unit = { _, _ -> },
 ) {
     private val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val gattServer: BluetoothGattServer by lazy { manager.openGattServer(context, callback) }
@@ -54,8 +55,8 @@ class GattServerHandler(
         )
         val identity = BluetoothGattCharacteristic(
             BleProtocol.CHAR_IDENTITY,
-            BluetoothGattCharacteristic.PROPERTY_READ,
-            BluetoothGattCharacteristic.PERMISSION_READ,
+            BluetoothGattCharacteristic.PROPERTY_READ or BluetoothGattCharacteristic.PROPERTY_WRITE,
+            BluetoothGattCharacteristic.PERMISSION_READ or BluetoothGattCharacteristic.PERMISSION_WRITE,
         )
 
         val cccdUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
@@ -97,6 +98,7 @@ class GattServerHandler(
             when (characteristic.uuid) {
                 BleProtocol.CHAR_MERKLE_QUERY -> handleQuery(device, value)
                 BleProtocol.CHAR_EVENT_FETCH -> handleEventFetchWrite(device, value)
+                BleProtocol.CHAR_IDENTITY -> handleIdentityWrite(device, value)
             }
             if (responseNeeded) {
                 gattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
@@ -135,6 +137,17 @@ class GattServerHandler(
             if (responseNeeded) {
                 gattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
             }
+        }
+    }
+
+    private fun handleIdentityWrite(device: BluetoothDevice, value: ByteArray) {
+        val announce = BleProtocol.decodeIdentityAnnounce(value)
+        if (announce != null) {
+            val (deviceId, peerUsername) = announce
+            Timber.d("GATT identity write received: deviceId=%08x username=%s", deviceId, peerUsername)
+            onPeerIdentity(deviceId, peerUsername)
+        } else {
+            Timber.w("GATT identity write decoded to null announce")
         }
     }
 

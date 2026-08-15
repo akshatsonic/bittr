@@ -60,11 +60,13 @@ object EventWireCodec {
     private fun kindToByte(kind: EventKind): Byte = when (kind) {
         EventKind.POST -> 0
         EventKind.LIKE -> 1
+        EventKind.UNLIKE -> 2
     }
 
     private fun byteToKind(b: Byte): EventKind? = when (b.toInt()) {
         0 -> EventKind.POST
         1 -> EventKind.LIKE
+        2 -> EventKind.UNLIKE
         else -> null
     }
 }

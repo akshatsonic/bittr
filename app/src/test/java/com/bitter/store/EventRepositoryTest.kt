@@ -55,6 +55,14 @@ class EventRepositoryTest {
     }
 
     @Test
+    fun `unlike creates an unlike event targeting another event`() = runTest {
+        val event = repo("bob").unlike("some-target-id")
+        assertEquals(EventKind.UNLIKE, event.kind)
+        assertEquals("some-target-id", event.targetEventId)
+        assertTrue(Event.verify(event))
+    }
+
+    @Test
     fun `apply remote inserts valid events and returns the count`() = runTest {
         val store = InMemoryEventStore()
         val repo = repo("alice", store)

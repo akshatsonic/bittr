@@ -65,6 +65,13 @@ class EventCodecTest {
     }
 
     @Test
+    fun `wire codec round trips an unlike event`() {
+        val event = Event.create(EventKind.UNLIKE, "bob", "", "f8442753195e92a2de341bdf41e948e10e496696c6f0fee03f4c93aa3031b13f", createdAt)
+        val decoded = EventWireCodec.decode(EventWireCodec.encode(event))
+        assertEquals(event, decoded)
+    }
+
+    @Test
     fun `wire decode recomputes id and signature rather than trusting them`() {
         val event = Event.create(EventKind.POST, "carol", "x", null, createdAt)
         val bytes = EventWireCodec.encode(event)

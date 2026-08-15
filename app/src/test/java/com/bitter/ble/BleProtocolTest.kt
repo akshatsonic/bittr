@@ -69,4 +69,23 @@ class BleProtocolTest {
         assertEquals(null, BleProtocol.decodePush(BleProtocol.encodeEventStream(byteArrayOf(1))))
         assertEquals(null, BleProtocol.decodeEventStream(BleProtocol.encodePush(byteArrayOf(1))))
     }
+
+    @Test
+    fun `identity announce round trips`() {
+        val decoded = BleProtocol.decodeIdentityAnnounce(BleProtocol.encodeIdentityAnnounce(0x12345678, "bob"))
+        assertEquals(0x12345678, decoded?.first)
+        assertEquals("bob", decoded?.second)
+    }
+
+    @Test
+    fun `identity announce round trips empty username`() {
+        val decoded = BleProtocol.decodeIdentityAnnounce(BleProtocol.encodeIdentityAnnounce(0x12345678, ""))
+        assertEquals(0x12345678, decoded?.first)
+        assertEquals("", decoded?.second)
+    }
+
+    @Test
+    fun `decode identity announce rejects truncated payload`() {
+        assertEquals(null, BleProtocol.decodeIdentityAnnounce(byteArrayOf(0x01, 0x02, 0x03)))
+    }
 }

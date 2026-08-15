@@ -11,6 +11,7 @@ object BleProtocol {
 
     const val ROOM_ID = 0x0A
     const val ADVERT_COMPANY_ID = 0xFFFF
+    const val NICKNAME_COMPANY_ID = 0xFFFE
 
     // MERKLE_QUERY opcodes
     const val OP_NODE_HASH = 0
@@ -132,5 +133,28 @@ object BleProtocol {
     fun decodePush(payload: ByteArray): ByteArray? {
         if (payload.isEmpty() || (payload[0].toInt() and 0xFF) != OP_PUSH) return null
         return payload.copyOfRange(1, payload.size)
+    }
+
+    fun encodeIdentityAnnounce(deviceId: Int, username: String): ByteArray {
+        val user = username.toByteArray(Charsets.UTF_8)
+        val buf = java.nio.ByteBuffer.allocate(4 + 1 + user.size)
+        buf.putInt(deviceId)
+        buf.put(user.size.toByte())
+        buf.put(user)
+        return buf.array()
+    }
+
+    fun decodeIdentityAnnounce(payload: ByteArray): Pair<Int, String>? {
+        if (payload.size < 5) return null
+        return try {
+            val buf = java.nio.ByteBuffer.wrap(payload)
+            val deviceId = buf.int
+            val userLen = buf.get().toInt() and 0xFF
+            if (buf.remaining() != userLen) return null
+            val username = ByteArray(userLen).also { buf.get(it) }.toString(Charsets.UTF_8)
+            deviceId to username
+        } catch (e: Exception) {
+            null
+        }
     }
 }

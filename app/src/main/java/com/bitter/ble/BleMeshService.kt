@@ -20,8 +20,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
+import com.bitter.AppGraph
 import com.bitter.BitterApplication
 import com.bitter.R
+import com.bitter.mesh.ActiveSync
+import com.bitter.mesh.PeerInfo
 import com.bitter.sync.LocalSyncServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +36,8 @@ import timber.log.Timber
 class BleMeshService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    private val graph: AppGraph by lazy { (application as BitterApplication).graph }
 
     private var adapter: BluetoothAdapter? = null
     private var advertiser: BluetoothLeAdvertiser? = null
@@ -48,10 +53,12 @@ class BleMeshService : Service() {
     private val advertiseCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
             Timber.d("ADVERTISE started ok (mode=%d)", settingsInEffect.mode)
+            graph.meshStatus.setAdvertising(true)
         }
 
         override fun onStartFailure(errorCode: Int) {
             Timber.w("ADVERTISE failed: errorCode=%d", errorCode)
+            graph.meshStatus.setAdvertising(false)
         }
     }
 
@@ -84,6 +91,9 @@ class BleMeshService : Service() {
             { currentServer },
             graph.username,
             onPushEvents = { events -> scope.launch { graph.repository.applyRemote(events) } },
+            onPeerIdentity = { deviceId, username ->
+                scope.launch { graph.nicknames.recordUsername(deviceId, username) }
+            },
         )
         gattServerHandler?.start()
 
@@ -91,6 +101,13 @@ class BleMeshService : Service() {
             graph.repository.observeTimeline().collect { events ->
                 currentServer = LocalSyncServer(events)
                 Timber.d("timeline changed: %d events, root=%s", events.size, currentServer.truncatedRoot().toHex())
+                restartAdvertising(graph)
+            }
+        }
+
+        scope.launch {
+            graph.ownNickname.collect { nickname ->
+                Timber.d("own nickname changed: %s", nickname)
                 restartAdvertising(graph)
             }
         }
@@ -138,14 +155,29 @@ class BleMeshService : Service() {
         val data = AdvertiseData.Builder()
             .addManufacturerData(BleProtocol.ADVERT_COMPANY_ID, AdvertPacket.encode(packet))
             .build()
+        val nickname = graph.ownNickname.value
+        val scanResponse = if (nickname.isNotEmpty()) {
+            AdvertiseData.Builder()
+                .addManufacturerData(
+                    BleProtocol.NICKNAME_COMPANY_ID,
+                    NicknamePacket.encode(NicknamePacket.VERSION, graph.deviceId, nickname),
+                )
+                .build()
+        } else {
+            null
+        }
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
             .setConnectable(true)
             .setTimeout(0)
             .build()
-        Timber.d("ADVERTISE starting: deviceId=%08x root=%s", packet.deviceId, packet.merkleRoot.toHex())
-        adv.startAdvertising(settings, data, advertiseCallback)
+        Timber.d("ADVERTISE starting: deviceId=%08x root=%s nickname=%s", packet.deviceId, packet.merkleRoot.toHex(), nickname)
+        if (scanResponse != null) {
+            adv.startAdvertising(settings, data, scanResponse, advertiseCallback)
+        } else {
+            adv.startAdvertising(settings, data, advertiseCallback)
+        }
     }
 
     private fun startScanning() {
@@ -172,26 +204,47 @@ class BleMeshService : Service() {
         if (packet.roomId != BleProtocol.ROOM_ID) return
 
         val device = result.device
-        val myId = (application as BitterApplication).graph.deviceId
+        val graph = (application as BitterApplication).graph
+        val myId = graph.deviceId
         val rootMatches = currentServer.truncatedRoot().contentEquals(packet.merkleRoot)
         val iAmClient = CollisionResolver.isClient(myId, packet.deviceId)
 
-        Timber.v("SCAN peer=%s rssi=%d peerId=%08x myId=%08x rootMatch=%s iAmClient=%s",
-            device.address, result.rssi, packet.deviceId, myId, rootMatches, iAmClient)
+        val nicknamePayload = record.getManufacturerSpecificData(BleProtocol.NICKNAME_COMPANY_ID)
+        val nickname = NicknamePacket.decode(nicknamePayload)?.nickname
+            ?: graph.nicknames.nicknameFor(packet.deviceId)
+
+        Timber.v("SCAN peer=%s rssi=%d peerId=%08x myId=%08x rootMatch=%s iAmClient=%s nickname=%s",
+            device.address, result.rssi, packet.deviceId, myId, rootMatches, iAmClient, nickname)
 
         seenDevices.add(device.address)
+        scope.launch {
+            graph.meshStatus.upsertPeer(
+                PeerInfo(
+                    deviceId = packet.deviceId,
+                    nickname = nickname,
+                    address = device.address,
+                    rssi = result.rssi,
+                    rootMatches = rootMatches,
+                ),
+            )
+        }
+        nickname?.let { scope.launch { graph.nicknames.recordNickname(packet.deviceId, it) } }
 
         if (rootMatches) return
         if (!iAmClient) return
         if (device.address in syncingDevices) return
 
         Timber.d("SCAN: root mismatch, connecting as client to %s", device.address)
+        graph.meshStatus.setActiveSync(ActiveSync(packet.deviceId, "initiating"))
         syncingDevices.add(device.address)
         scope.launch(Dispatchers.IO) {
             try {
                 val client = GattClientSync(this@BleMeshService, device)
                 if (client.connect() && client.awaitReady(10_000)) {
-                    (application as BitterApplication).graph.coordinator.sync(client.peer) { events ->
+                    client.writeIdentity(myId, graph.username)
+                    val peerUsername = client.readIdentity()
+                    peerUsername?.let { graph.nicknames.recordUsername(packet.deviceId, it) }
+                    graph.coordinator.sync(client.peer) { events ->
                         client.pushEvents(events)
                     }
                 } else {
@@ -199,6 +252,7 @@ class BleMeshService : Service() {
                 }
                 client.close()
             } finally {
+                graph.meshStatus.setActiveSync(null)
                 syncingDevices.remove(device.address)
             }
         }
