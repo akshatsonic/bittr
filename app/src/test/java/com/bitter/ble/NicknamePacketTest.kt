@@ -1,7 +1,6 @@
 package com.bitter.ble
 
 import kotlin.test.Test
-import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -10,7 +9,7 @@ class NicknamePacketTest {
 
     @Test
     fun `packet fits legacy BLE scan response`() {
-        val packet = NicknamePacket.encode(1, 0x01020304, "alice")
+        val packet = NicknamePacket.encode(1, 0x01020304, "alice")!!
         assertTrue(packet.size <= 27)
         assertEquals(11, packet.size)
     }
@@ -44,7 +43,7 @@ class NicknamePacketTest {
 
     @Test
     fun `decode rejects truncated nickname`() {
-        val bytes = NicknamePacket.encode(1, 0x01020304, "abcdef")
+        val bytes = NicknamePacket.encode(1, 0x01020304, "abcdef")!!
         val truncated = bytes.copyOf(8)
         assertNull(NicknamePacket.decode(truncated))
     }
@@ -59,13 +58,24 @@ class NicknamePacketTest {
     fun `full 20 byte nickname fits`() {
         val nick = "a".repeat(20)
         val bytes = NicknamePacket.encode(1, 0x01020304, nick)
-        assertTrue(bytes.size <= 27)
+        assertTrue(bytes!!.size <= 27)
         assertEquals(nick, NicknamePacket.decode(bytes)?.nickname)
     }
 
     @Test
-    fun `nickname longer than 20 bytes is rejected`() {
-        val decoded = NicknamePacket.decode(NicknamePacket.encode(1, 0x01020304, "a".repeat(21)))
-        assertNull(decoded)
+    fun `nickname longer than 20 bytes is rejected by decode`() {
+        val bytes = NicknamePacket.encode(1, 0x01020304, "a".repeat(21))
+        assertNull(bytes)
+    }
+
+    @Test
+    fun `encode returns null for default username length nickname`() {
+        assertNull(NicknamePacket.encode(1, 0x01020304, "bittr-lucky-quail-7650"))
+    }
+
+    @Test
+    fun `encode accepts up to 20 byte nickname`() {
+        val packet = NicknamePacket.encode(1, 0x01020304, "a".repeat(20))
+        assertEquals(20, NicknamePacket.decode(packet)?.nickname?.length)
     }
 }

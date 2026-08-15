@@ -28,7 +28,9 @@ class AppGraph(context: Context) {
         }
 
     private val nickPref: String = prefs.getString("nickname", null)
-        ?: username.also { prefs.edit().putString("nickname", it).apply() }
+        ?: username.take(NicknameRegistry.MAX_NICKNAME_CHARS).also {
+            prefs.edit().putString("nickname", it).apply()
+        }
 
     private val _ownNickname = MutableStateFlow(nickPref)
     val ownNickname: StateFlow<String> = _ownNickname

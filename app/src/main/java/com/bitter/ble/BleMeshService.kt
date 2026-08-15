@@ -156,15 +156,13 @@ class BleMeshService : Service() {
             .addManufacturerData(BleProtocol.ADVERT_COMPANY_ID, AdvertPacket.encode(packet))
             .build()
         val nickname = graph.ownNickname.value
-        val scanResponse = if (nickname.isNotEmpty()) {
+        val scanResponse = NicknamePacket.encode(NicknamePacket.VERSION, graph.deviceId, nickname)?.let { packet ->
             AdvertiseData.Builder()
-                .addManufacturerData(
-                    BleProtocol.NICKNAME_COMPANY_ID,
-                    NicknamePacket.encode(NicknamePacket.VERSION, graph.deviceId, nickname),
-                )
+                .addManufacturerData(BleProtocol.NICKNAME_COMPANY_ID, packet)
                 .build()
-        } else {
-            null
+        }
+        if (nickname.isNotEmpty() && scanResponse == null) {
+            Timber.w("ADVERTISE skipping nickname scan response: nickname too long (%d chars)", nickname.length)
         }
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)

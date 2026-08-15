@@ -10,8 +10,9 @@ data class NicknamePacket(
         const val MAX_NICKNAME_BYTES = 20
         const val MAX_SIZE = 27
 
-        fun encode(version: Int, deviceId: Int, nickname: String): ByteArray {
+        fun encode(version: Int, deviceId: Int, nickname: String): ByteArray? {
             val nick = nickname.toByteArray(Charsets.UTF_8)
+            if (nick.size > MAX_NICKNAME_BYTES) return null
             val bytes = ByteArray(6 + nick.size)
             bytes[0] = version.toByte()
             bytes[1] = (deviceId ushr 24).toByte()
