@@ -27,8 +27,17 @@ object TimelineModel {
 
         fun activeLikersFor(postId: String): List<String> {
             val likes = likesByTarget[postId] ?: emptyList()
-            val unliked = (unlikesByTarget[postId] ?: emptyList()).map { it.author }.toSet()
-            return likes.map { it.author }.distinct().filter { it !in unliked }
+            val unlikes = unlikesByTarget[postId] ?: emptyList()
+            val likers = likes.map { it.author }.distinct()
+            return likers.filter { author ->
+                val lastLike = likes.filter { it.author == author }.maxOfOrNull { it.createdAt }
+                val lastUnlike = unlikes.filter { it.author == author }.maxOfOrNull { it.createdAt }
+                when {
+                    lastLike == null -> false
+                    lastUnlike == null -> true
+                    else -> lastLike > lastUnlike
+                }
+            }
         }
 
         fun display(author: String): String = displayNames[author] ?: author
@@ -36,7 +45,9 @@ object TimelineModel {
         return posts.map { post ->
             val activeAuthors = activeLikersFor(post.id)
             val likes = activeAuthors.map { author ->
-                (likesByTarget[post.id] ?: emptyList()).first { it.author == author }
+                (likesByTarget[post.id] ?: emptyList())
+                    .filter { it.author == author }
+                    .maxBy { it.createdAt }
             }.sortedBy { it.createdAt }
             val displayLikes = likes.map { it.copy(author = display(it.author)) }
             TimelineItem(

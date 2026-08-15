@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -45,6 +46,7 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     var draft by remember { mutableStateOf("") }
     var panelExpanded by remember { mutableStateOf(false) }
     var fingerprintTarget by remember { mutableStateOf<FingerprintTarget?>(null) }
+    var likesTarget by remember { mutableStateOf<LikesTarget?>(null) }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -81,6 +83,13 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                             } else {
                                 viewModel.like(item.post.id)
                             }
+                        },
+                        onShowLikers = {
+                            likesTarget = LikesTarget(
+                                postId = item.post.id,
+                                likers = item.displayLikes.map { it.author },
+                                usernames = item.likes.map { it.author },
+                            )
                         },
                         onFingerprint = { username ->
                             fingerprintTarget = FingerprintTarget(
@@ -126,6 +135,59 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
             onDismiss = { fingerprintTarget = null },
         )
     }
+
+    likesTarget?.let { target ->
+        LikersDialog(
+            target = target,
+            onFingerprint = { username ->
+                fingerprintTarget = FingerprintTarget(
+                    displayName = viewModel.displayNames.value[username] ?: username,
+                    username = username,
+                    deviceId = viewModel.fingerprintFor(username),
+                )
+            },
+            onDismiss = { likesTarget = null },
+        )
+    }
+}
+
+data class LikesTarget(
+    val postId: String,
+    val likers: List<String>,
+    val usernames: List<String>,
+)
+
+@Composable
+private fun LikersDialog(
+    target: LikesTarget,
+    onFingerprint: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Liked by ${target.likers.size}") },
+        text = {
+            if (target.likers.isEmpty()) {
+                Text("No likes yet")
+            } else {
+                LazyColumn(modifier = Modifier.height(300.dp)) {
+                    items(target.likers.size) { index ->
+                        Text(
+                            text = "@${target.likers[index]}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onFingerprint(target.usernames[index]) }
+                                .padding(vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+    )
 }
 
 data class FingerprintTarget(
@@ -285,6 +347,7 @@ private fun PeerRow(peer: PeerInfo) {
 private fun PostCard(
     item: TimelineItem,
     onLike: () -> Unit,
+    onShowLikers: () -> Unit,
     onFingerprint: (String) -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -317,15 +380,12 @@ private fun PostCard(
                     )
                 }
                 Text(
-                    text = if (item.likes.isNotEmpty()) "${item.likes.size}" else "",
+                    text = "${item.likes.size}",
                     style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            if (item.displayLikes.isNotEmpty()) {
-                Text(
-                    text = "Liked by ${item.displayLikes.joinToString(", ") { "@${it.author}" }}",
-                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .clickable(onClick = onShowLikers)
+                        .padding(4.dp),
                 )
             }
         }

@@ -124,4 +124,37 @@ class TimelineModelTest {
         val items = TimelineModel.build(listOf(p, l), myUsername = "me")
         assertEquals(false, items[0].likedByMe)
     }
+
+    @Test
+    fun `re-like after unlike restores the like`() {
+        val p = post("bob", "hello", t0)
+        val l1 = like("me", p.id, t0 + 1)
+        val u = unlike("me", p.id, t0 + 2)
+        val l2 = like("me", p.id, t0 + 3)
+        val items = TimelineModel.build(listOf(p, l1, u, l2), myUsername = "me")
+        assertEquals(1, items[0].likes.size)
+        assertEquals(true, items[0].likedByMe)
+    }
+
+    @Test
+    fun `unlike after re-like removes the like again`() {
+        val p = post("bob", "hello", t0)
+        val l1 = like("me", p.id, t0 + 1)
+        val u1 = unlike("me", p.id, t0 + 2)
+        val l2 = like("me", p.id, t0 + 3)
+        val u2 = unlike("me", p.id, t0 + 4)
+        val items = TimelineModel.build(listOf(p, l1, u1, l2, u2), myUsername = "me")
+        assertEquals(0, items[0].likes.size)
+        assertEquals(false, items[0].likedByMe)
+    }
+
+    @Test
+    fun `unlike before a like does not block the like`() {
+        val p = post("bob", "hello", t0)
+        val u = unlike("me", p.id, t0 + 1)
+        val l = like("me", p.id, t0 + 2)
+        val items = TimelineModel.build(listOf(p, u, l), myUsername = "me")
+        assertEquals(1, items[0].likes.size)
+        assertEquals(true, items[0].likedByMe)
+    }
 }
