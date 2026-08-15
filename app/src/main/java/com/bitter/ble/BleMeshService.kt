@@ -30,6 +30,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -50,14 +52,25 @@ class BleMeshService : Service() {
     private val seenDevices = mutableSetOf<String>()
     private val syncingDevices = mutableSetOf<String>()
 
+    @Volatile
+    private var advertising = false
+
+    @Volatile
+    private var scanning = false
+
+    @Volatile
+    private var meshLoopRunning = false
+
     private val advertiseCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
             Timber.d("ADVERTISE started ok (mode=%d)", settingsInEffect.mode)
+            advertising = true
             graph.meshStatus.setAdvertising(true)
         }
 
         override fun onStartFailure(errorCode: Int) {
             Timber.w("ADVERTISE failed: errorCode=%d", errorCode)
+            advertising = false
             graph.meshStatus.setAdvertising(false)
         }
     }
@@ -101,19 +114,10 @@ class BleMeshService : Service() {
             graph.repository.observeTimeline().collect { events ->
                 currentServer = LocalSyncServer(events)
                 Timber.d("timeline changed: %d events, root=%s", events.size, currentServer.truncatedRoot().toHex())
-                restartAdvertising(graph)
             }
         }
 
-        scope.launch {
-            graph.ownNickname.collect { nickname ->
-                Timber.d("own nickname changed: %s", nickname)
-                restartAdvertising(graph)
-            }
-        }
-
-        restartAdvertising(graph)
-        startScanning()
+        startMeshLoop(graph)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
@@ -138,7 +142,23 @@ class BleMeshService : Service() {
         }
     }
 
-    private fun restartAdvertising(graph: com.bitter.AppGraph) {
+    private fun startMeshLoop(graph: AppGraph) {
+        if (meshLoopRunning) return
+        meshLoopRunning = true
+        scope.launch {
+            Timber.d("MESH loop starting: alternate advertise/scan every %d ms", PHASE_MS)
+            while (isActive) {
+                doStartAdvertising(graph)
+                delay(PHASE_MS)
+                stopAdvertising()
+                startScanning()
+                delay(PHASE_MS)
+                stopScanning()
+            }
+        }
+    }
+
+    private fun doStartAdvertising(graph: AppGraph) {
         val adv = advertiser ?: return
         if (!hasPermissions()) {
             Timber.w("ADVERTISE skipped: no permission")
@@ -178,17 +198,32 @@ class BleMeshService : Service() {
         }
     }
 
+    private fun stopAdvertising() {
+        advertiser?.stopAdvertising(advertiseCallback)
+        advertising = false
+        graph.meshStatus.setAdvertising(false)
+    }
+
     private fun startScanning() {
         val sc = scanner ?: return
         if (!hasPermissions()) {
             Timber.w("SCAN skipped: no permission")
             return
         }
+        if (scanning) return
+        scanning = true
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
         Timber.d("SCAN starting")
         sc.startScan(null, settings, scanCallback)
+    }
+
+    private fun stopScanning() {
+        if (!scanning) return
+        scanner?.stopScan(scanCallback)
+        scanning = false
+        Timber.d("SCAN stopping")
     }
 
     private fun handleScanResult(result: ScanResult) {
@@ -280,5 +315,6 @@ class BleMeshService : Service() {
 
     private companion object {
         const val NOTIFICATION_ID = 1
+        const val PHASE_MS = 3_000L
     }
 }

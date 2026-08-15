@@ -28,7 +28,7 @@ class AppGraph(context: Context) {
         }
 
     private val nickPref: String = prefs.getString("nickname", null)
-        ?: username.take(NicknameRegistry.MAX_NICKNAME_CHARS).also {
+        ?: defaultNickname(deviceId).also {
             prefs.edit().putString("nickname", it).apply()
         }
 
@@ -39,7 +39,12 @@ class AppGraph(context: Context) {
 
     val meshStatus: MeshStatusStore = MeshStatusStore()
 
-    val logStore: LogStore = LogStore()
+    val logStore: LogStore = LogStore(
+        persist = { entries ->
+            prefs.edit().putString(LOG_PREFS_KEY, LogStore.serializeAll(entries)).apply()
+        },
+        restore = { prefs.getString(LOG_PREFS_KEY, null) ?: "" },
+    )
 
     val database: BitterDatabase =
         Room.databaseBuilder(context, BitterDatabase::class.java, "bitter.db").build()
@@ -65,7 +70,14 @@ class AppGraph(context: Context) {
         return id
     }
 
+    private fun defaultNickname(deviceId: Int): String =
+        "bittr-%04x".format(deviceId and 0xFFFF)
+
     private fun fingerprint(context: Context): String =
         Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
             ?: "unknown-device"
+
+    private companion object {
+        const val LOG_PREFS_KEY = "logs_v1"
+    }
 }

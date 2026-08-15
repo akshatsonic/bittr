@@ -348,6 +348,7 @@ private fun MeshStatusPanel(
     onToggle: () -> Unit,
     onNicknameChange: (String) -> Unit,
 ) {
+    var nicknameDraft by remember(ownNickname) { mutableStateOf(ownNickname) }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -393,12 +394,16 @@ private fun MeshStatusPanel(
                         modifier = Modifier.padding(top = 8.dp),
                     ) {
                         OutlinedTextField(
-                            value = ownNickname,
-                            onValueChange = { onNicknameChange(it) },
+                            value = nicknameDraft,
+                            onValueChange = { nicknameDraft = it.take(20) },
                             modifier = Modifier.weight(1f),
                             label = { Text("Your nickname") },
                             singleLine = true,
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(onClick = { onNicknameChange(nicknameDraft.trim()) }) {
+                            Text("Save")
+                        }
                     }
                     Text(
                         text = "Nearby peers:",
