@@ -46,6 +46,7 @@ import com.bitter.log.LogEntry
 import com.bitter.log.LogStore
 import com.bitter.mesh.PeerInfo
 import com.bitter.model.Event
+import com.bitter.ble.NicknamePacket
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -251,8 +252,8 @@ private fun TimelineTab(
     }
 }
 
-private fun charCountColor(remaining: Int): Color {
-    val ratio = remaining.toFloat() / Event.MAX_CONTENT_LENGTH
+private fun charCountColor(remaining: Int, max: Int = Event.MAX_CONTENT_LENGTH): Color {
+    val ratio = remaining.toFloat() / max
     return when {
         remaining <= 0 -> Color(0xFFD32F2F)
         remaining < 10 -> Color(0xFFD32F2F)
@@ -446,7 +447,11 @@ private fun MeshStatusPanel(
                     ) {
                         OutlinedTextField(
                             value = nicknameDraft,
-                            onValueChange = { nicknameDraft = it.take(20) },
+                            onValueChange = { newValue ->
+                                if (NicknamePacket.byteLength(newValue) <= NicknamePacket.MAX_NICKNAME_BYTES) {
+                                    nicknameDraft = newValue
+                                }
+                            },
                             modifier = Modifier.weight(1f),
                             label = { Text("Your nickname") },
                             singleLine = true,
@@ -456,6 +461,15 @@ private fun MeshStatusPanel(
                             Text("Save")
                         }
                     }
+                    val nickRemaining = NicknamePacket.MAX_NICKNAME_BYTES - NicknamePacket.byteLength(nicknameDraft)
+                    Text(
+                        text = "$nickRemaining",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = charCountColor(nickRemaining, NicknamePacket.MAX_NICKNAME_BYTES),
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .padding(top = 2.dp),
+                    )
                     Text(
                         text = "Nearby peers:",
                         style = MaterialTheme.typography.labelMedium,

@@ -2,6 +2,7 @@ package com.bitter.ble
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -77,5 +78,35 @@ class NicknamePacketTest {
     fun `encode accepts up to 20 byte nickname`() {
         val packet = NicknamePacket.encode(1, 0x01020304, "a".repeat(20))
         assertEquals(20, NicknamePacket.decode(packet)?.nickname?.length)
+    }
+
+    @Test
+    fun `byteLength counts utf8 bytes not chars`() {
+        assertEquals(5, NicknamePacket.byteLength("hello"))
+        assertEquals(6, NicknamePacket.byteLength("héllo")) // é is 2 bytes
+    }
+
+    @Test
+    fun `truncateToMaxBytes keeps short strings intact`() {
+        assertEquals("hello", NicknamePacket.truncateToMaxBytes("hello"))
+    }
+
+    @Test
+    fun `truncateToMaxBytes cuts to 20 bytes`() {
+        assertEquals("a".repeat(20), NicknamePacket.truncateToMaxBytes("a".repeat(30)))
+    }
+
+    @Test
+    fun `truncateToMaxBytes does not split a multibyte char`() {
+        val nick = "a".repeat(19) + "é"
+        val truncated = NicknamePacket.truncateToMaxBytes(nick)
+        assertTrue(NicknamePacket.byteLength(truncated) <= 20)
+        assertFalse(truncated.endsWith("\uFFFD"))
+    }
+
+    @Test
+    fun `truncated nickname encodes successfully`() {
+        val truncated = NicknamePacket.truncateToMaxBytes("bittr-lucky-quail-7650")
+        assertTrue(NicknamePacket.encode(1, 0x01020304, truncated) != null)
     }
 }

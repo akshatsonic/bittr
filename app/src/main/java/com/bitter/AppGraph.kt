@@ -56,7 +56,7 @@ class AppGraph(context: Context) {
     val coordinator: MeshCoordinator = MeshCoordinator(repository, deviceId)
 
     fun setOwnNickname(nickname: String) {
-        val normalized = nickname.trim().take(NicknameRegistry.MAX_NICKNAME_CHARS)
+        val normalized = com.bitter.ble.NicknamePacket.truncateToMaxBytes(nickname.trim())
         prefs.edit().putString("nickname", normalized).apply()
         _ownNickname.value = normalized
     }

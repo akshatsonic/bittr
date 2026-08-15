@@ -10,6 +10,16 @@ data class NicknamePacket(
         const val MAX_NICKNAME_BYTES = 20
         const val MAX_SIZE = 27
 
+        fun byteLength(nickname: String): Int = nickname.toByteArray(Charsets.UTF_8).size
+
+        fun truncateToMaxBytes(nickname: String): String {
+            val bytes = nickname.toByteArray(Charsets.UTF_8)
+            if (bytes.size <= MAX_NICKNAME_BYTES) return nickname
+            var end = MAX_NICKNAME_BYTES
+            while (end > 0 && ((bytes[end].toInt() and 0xC0) == 0x80)) end--
+            return String(bytes, 0, end, Charsets.UTF_8)
+        }
+
         fun encode(version: Int, deviceId: Int, nickname: String): ByteArray? {
             val nick = nickname.toByteArray(Charsets.UTF_8)
             if (nick.size > MAX_NICKNAME_BYTES) return null

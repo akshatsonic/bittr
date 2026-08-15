@@ -82,6 +82,5 @@ class NicknameRegistry(
 
     companion object {
         const val DEFAULT_MAX_SIZE = 300
-        const val MAX_NICKNAME_CHARS = 20
     }
 }
