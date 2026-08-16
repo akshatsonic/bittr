@@ -14,8 +14,8 @@ android {
         applicationId = "com.bitter"
         minSdk = 26
         targetSdk = 34
-        versionCode = (project.findProperty("versionCode") as? String)?.toIntOrNull() ?: 5
-        versionName = (project.findProperty("versionName") as? String) ?: "0.1.4"
+        versionCode = (project.findProperty("versionCode") as? String)?.toIntOrNull() ?: 6
+        versionName = (project.findProperty("versionName") as? String) ?: "0.1.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
