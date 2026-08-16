@@ -63,6 +63,22 @@ class EventRepositoryTest {
     }
 
     @Test
+    fun `change username creates a change username event`() = runTest {
+        val event = repo("bob").changeUsername("cool-cat")
+        assertEquals(EventKind.CHANGE_USERNAME, event.kind)
+        assertEquals("bob", event.author)
+        assertEquals("cool-cat", event.content)
+        assertTrue(Event.verify(event))
+    }
+
+    @Test
+    fun `change username rejects blank name`() = runTest {
+        assertFailsWith<IllegalArgumentException> {
+            repo("bob").changeUsername("   ")
+        }
+    }
+
+    @Test
     fun `apply remote inserts valid events and returns the count`() = runTest {
         val store = InMemoryEventStore()
         val repo = repo("alice", store)

@@ -15,7 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import com.bitter.log.Log
 import java.util.ArrayDeque
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -61,7 +61,7 @@ class GattClientSync(
 
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
-            Timber.d("GATT client state: device=%s status=%d newState=%d", g.device.address, status, newState)
+            Log.d("GATT client state: device=%s status=%d newState=%d", g.device.address, status, newState)
             if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
                 g.discoverServices()
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
@@ -70,13 +70,13 @@ class GattClientSync(
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
-            Timber.d("GATT services discovered: status=%d", status)
+            Log.d("GATT services discovered: status=%d", status)
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 ready.countDown()
                 return
             }
             if (!g.requestMtu(512)) {
-                Timber.w("GATT requestMtu returned false, using default MTU")
+                Log.w("GATT requestMtu returned false, using default MTU")
                 mtu = DEFAULT_MTU
                 mtuReady = true
                 enableNotifications(g)
@@ -85,7 +85,7 @@ class GattClientSync(
                 scope.launch {
                     delay(MTU_TIMEOUT_MS)
                     if (!mtuReady) {
-                        Timber.w("GATT MTU exchange timed out, falling back to default MTU")
+                        Log.w("GATT MTU exchange timed out, falling back to default MTU")
                         mtu = DEFAULT_MTU
                         mtuReady = true
                         gatt?.let { enableNotifications(it) }
@@ -96,7 +96,7 @@ class GattClientSync(
         }
 
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
-            Timber.d("GATT MTU changed: mtu=%d status=%d", mtu, status)
+            Log.d("GATT MTU changed: mtu=%d status=%d", mtu, status)
             this@GattClientSync.mtu = if (status == BluetoothGatt.GATT_SUCCESS) mtu else DEFAULT_MTU
             mtuReady = true
             enableNotifications(g)
@@ -104,7 +104,7 @@ class GattClientSync(
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-            Timber.d("GATT descriptor write confirmed: uuid=%s status=%d", descriptor.uuid, status)
+            Log.d("GATT descriptor write confirmed: uuid=%s status=%d", descriptor.uuid, status)
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 cccdCompleted++
             }
@@ -141,7 +141,7 @@ class GattClientSync(
             characteristic: BluetoothGattCharacteristic,
             status: Int,
         ) {
-            Timber.v("GATT write confirmed: char=%s status=%d", characteristic.uuid, status)
+            Log.v("GATT write confirmed: char=%s status=%d", characteristic.uuid, status)
             writeLatch.countDown()
         }
     }
@@ -154,7 +154,7 @@ class GattClientSync(
     fun connect(): Boolean {
         val g = device.connectGatt(context, false, callback) ?: return false
         gatt = g
-        Timber.d("GATT connect initiated to %s", device.address)
+        Log.d("GATT connect initiated to %s", device.address)
         return true
     }
 
@@ -198,20 +198,20 @@ class GattClientSync(
         val characteristic = cccdQueue.pollFirst() ?: return
         val descriptor = characteristic.getDescriptor(cccdUuid)
         if (descriptor == null) {
-            Timber.w("GATT no CCCD descriptor for %s, counting as completed", characteristic.uuid)
+            Log.w("GATT no CCCD descriptor for %s, counting as completed", characteristic.uuid)
             cccdCompleted++
             writeNextCccd(g)
             return
         }
         if (!g.setCharacteristicNotification(characteristic, true)) {
-            Timber.w("GATT setCharacteristicNotification returned false for %s", characteristic.uuid)
+            Log.w("GATT setCharacteristicNotification returned false for %s", characteristic.uuid)
             cccdCompleted++
             writeNextCccd(g)
             return
         }
         descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
         if (!g.writeDescriptor(descriptor)) {
-            Timber.w("GATT writeDescriptor returned false for %s, counting as completed", characteristic.uuid)
+            Log.w("GATT writeDescriptor returned false for %s, counting as completed", characteristic.uuid)
             cccdCompleted++
             writeNextCccd(g)
         }
@@ -234,7 +234,7 @@ class GattClientSync(
             characteristic.value = payload.copyOfRange(offset, end)
             writeLatch = CountDownLatch(1)
             val ok = g.writeCharacteristic(characteristic)
-            Timber.v("GATT write: char=%s ok=%s chunk=%d..%d", characteristic.uuid, ok, offset, end)
+            Log.v("GATT write: char=%s ok=%s chunk=%d..%d", characteristic.uuid, ok, offset, end)
             if (!ok) break
             writeLatch.await(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             offset = end
@@ -246,7 +246,7 @@ class GattClientSync(
     }
 
     fun pushEvents(events: List<Event>) {
-        Timber.d("GATT pushing %d events", events.size)
+        Log.d("GATT pushing %d events", events.size)
         for (event in events) {
             writeFramed(BleProtocol.CHAR_EVENT_FETCH, BleProtocol.encodePush(EventWireCodec.encode(event)))
         }
@@ -286,7 +286,7 @@ class GattClientSync(
                 val eventBytes = BleProtocol.decodeEventStream(frame) ?: continue
                 EventWireCodec.decode(eventBytes)?.let { events.add(it) }
             }
-            Timber.d("GATT pulled %d events", events.size)
+            Log.d("GATT pulled %d events", events.size)
             return events
         }
 
@@ -299,7 +299,7 @@ class GattClientSync(
                 val eventBytes = BleProtocol.decodeEventStream(frame) ?: continue
                 EventWireCodec.decode(eventBytes)?.let { events.add(it) }
             }
-            Timber.d("GATT pulled %d events (all)", events.size)
+            Log.d("GATT pulled %d events (all)", events.size)
             return events
         }
     }

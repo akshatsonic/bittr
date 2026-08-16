@@ -34,7 +34,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.random.Random
-import timber.log.Timber
+import com.bitter.log.Log
 
 class BleMeshService : Service() {
 
@@ -61,12 +61,12 @@ class BleMeshService : Service() {
 
     private val advertiseCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
-            Timber.d("ADVERTISE started ok (mode=%d)", settingsInEffect.mode)
+            Log.d("ADVERTISE started ok (mode=%d)", settingsInEffect.mode)
             graph.meshStatus.setAdvertising(true)
         }
 
         override fun onStartFailure(errorCode: Int) {
-            Timber.w("ADVERTISE failed: errorCode=%d", errorCode)
+            Log.w("ADVERTISE failed: errorCode=%d", errorCode)
             graph.meshStatus.setAdvertising(false)
         }
     }
@@ -77,7 +77,7 @@ class BleMeshService : Service() {
         }
 
         override fun onScanFailed(errorCode: Int) {
-            Timber.w("SCAN failed: errorCode=%d", errorCode)
+            Log.w("SCAN failed: errorCode=%d", errorCode)
         }
     }
 
@@ -92,7 +92,7 @@ class BleMeshService : Service() {
         advertiser = adapter?.bluetoothLeAdvertiser
         scanner = adapter?.bluetoothLeScanner
 
-        Timber.d("BleMeshService onCreate: adapter=%s advertiser=%s scanner=%s deviceId=%08x username=%s",
+        Log.d("BleMeshService onCreate: adapter=%s advertiser=%s scanner=%s deviceId=%08x username=%s",
             adapter != null, advertiser != null, scanner != null, graph.deviceId, graph.username)
 
         gattServerHandler = GattServerHandler(
@@ -109,7 +109,7 @@ class BleMeshService : Service() {
         scope.launch {
             graph.repository.observeTimeline().collect { events ->
                 currentServer = LocalSyncServer(events)
-                Timber.d("timeline changed: %d events, root=%s", events.size, currentServer.truncatedRoot().toHex())
+                Log.d("timeline changed: %d events, root=%s", events.size, currentServer.truncatedRoot().toHex())
             }
         }
 
@@ -143,7 +143,7 @@ class BleMeshService : Service() {
         meshLoopRunning = true
         scope.launch {
             val offset = initialPhaseOffsetMs()
-            Timber.d("MESH loop: advertise continuously, scan %d ms of every %d ms (offset=%d ms)", SCAN_WINDOW_MS, PHASE_MS, offset)
+            Log.d("MESH loop: advertise continuously, scan %d ms of every %d ms (offset=%d ms)", SCAN_WINDOW_MS, PHASE_MS, offset)
             delay(offset)
             while (isActive) {
                 doStartAdvertising(graph)
@@ -160,7 +160,7 @@ class BleMeshService : Service() {
     private fun doStartAdvertising(graph: AppGraph) {
         val adv = advertiser ?: return
         if (!hasPermissions()) {
-            Timber.w("ADVERTISE skipped: no permission")
+            Log.w("ADVERTISE skipped: no permission")
             return
         }
         adv.stopAdvertising(advertiseCallback)
@@ -181,7 +181,7 @@ class BleMeshService : Service() {
                 .build()
         }
         if (nickname.isNotEmpty() && scanResponse == null) {
-            Timber.w("ADVERTISE skipping nickname scan response: nickname too long (%d chars)", nickname.length)
+            Log.w("ADVERTISE skipping nickname scan response: nickname too long (%d chars)", nickname.length)
         }
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
@@ -189,7 +189,7 @@ class BleMeshService : Service() {
             .setConnectable(true)
             .setTimeout(0)
             .build()
-        Timber.d("ADVERTISE starting: deviceId=%08x root=%s nickname=%s", packet.deviceId, packet.merkleRoot.toHex(), nickname)
+        Log.d("ADVERTISE starting: deviceId=%08x root=%s nickname=%s", packet.deviceId, packet.merkleRoot.toHex(), nickname)
         if (scanResponse != null) {
             adv.startAdvertising(settings, data, scanResponse, advertiseCallback)
         } else {
@@ -205,7 +205,7 @@ class BleMeshService : Service() {
     private fun startScanning() {
         val sc = scanner ?: return
         if (!hasPermissions()) {
-            Timber.w("SCAN skipped: no permission")
+            Log.w("SCAN skipped: no permission")
             return
         }
         if (scanning) return
@@ -213,7 +213,7 @@ class BleMeshService : Service() {
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
-        Timber.d("SCAN starting")
+        Log.d("SCAN starting")
         sc.startScan(null, settings, scanCallback)
     }
 
@@ -221,7 +221,7 @@ class BleMeshService : Service() {
         if (!scanning) return
         scanner?.stopScan(scanCallback)
         scanning = false
-        Timber.d("SCAN stopping")
+        Log.d("SCAN stopping")
     }
 
     private fun handleScanResult(result: ScanResult) {
@@ -229,7 +229,7 @@ class BleMeshService : Service() {
         val payload = record.getManufacturerSpecificData(BleProtocol.ADVERT_COMPANY_ID) ?: return
         val packet = AdvertPacket.decode(payload)
         if (packet == null) {
-            Timber.v("SCAN: non-bittr advert (len=%d) from %s", payload.size, result.device.address)
+            Log.v("SCAN: non-bittr advert (len=%d) from %s", payload.size, result.device.address)
             return
         }
         if (packet.roomId != BleProtocol.ROOM_ID) return
@@ -250,7 +250,7 @@ class BleMeshService : Service() {
             peerNickname,
         )
 
-        Timber.v("SCAN peer=%s rssi=%d peerId=%08x myId=%08x rootMatch=%s iAmClient=%s nickname=%s",
+        Log.v("SCAN peer=%s rssi=%d peerId=%08x myId=%08x rootMatch=%s iAmClient=%s nickname=%s",
             device.address, result.rssi, packet.deviceId, myId, rootMatches, iAmClient, peerNickname)
 
         seenDevices.add(device.address)
@@ -272,7 +272,7 @@ class BleMeshService : Service() {
         if (!iAmClient) return
         if (device.address in syncingDevices) return
 
-        Timber.d("SCAN: root mismatch, connecting as client to %s", device.address)
+        Log.d("SCAN: root mismatch, connecting as client to %s", device.address)
         graph.meshStatus.setActiveSync(ActiveSync(packet.deviceId, "initiating"))
         syncingDevices.add(device.address)
         scope.launch(Dispatchers.IO) {
@@ -286,7 +286,7 @@ class BleMeshService : Service() {
                         client.pushEvents(events)
                     }
                 } else {
-                    Timber.w("GATT connect/ready timed out for %s", device.address)
+                    Log.w("GATT connect/ready timed out for %s", device.address)
                 }
                 client.close()
             } finally {

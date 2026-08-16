@@ -72,6 +72,13 @@ class EventCodecTest {
     }
 
     @Test
+    fun `wire codec round trips a change username event`() {
+        val event = Event.create(EventKind.CHANGE_USERNAME, "bob", "cool-cat", null, createdAt)
+        val decoded = EventWireCodec.decode(EventWireCodec.encode(event))
+        assertEquals(event, decoded)
+    }
+
+    @Test
     fun `wire decode recomputes id and signature rather than trusting them`() {
         val event = Event.create(EventKind.POST, "carol", "x", null, createdAt)
         val bytes = EventWireCodec.encode(event)

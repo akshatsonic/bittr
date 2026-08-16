@@ -3,10 +3,12 @@ package com.bitter.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.bitter.ble.NicknamePacket
 import com.bitter.log.LogStore
 import com.bitter.mesh.MeshStatus
 import com.bitter.mesh.MeshStatusStore
 import com.bitter.mesh.NicknameRegistry
+import com.bitter.model.EventKind
 import com.bitter.store.EventRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,10 +32,15 @@ class TimelineViewModel(
     val logEntries: StateFlow<List<com.bitter.log.LogEntry>> = logStore.entries
 
     val displayNames: StateFlow<Map<String, String>> = combine(
+        repository.observeTimeline(),
         nicknames.displayNames,
         ownNickname,
-    ) { peerNames, own ->
-        peerNames + (username to own)
+    ) { events, peerNames, own ->
+        val renames = events
+            .filter { it.kind == EventKind.CHANGE_USERNAME }
+            .groupBy { it.author }
+            .mapValues { (_, authorEvents) -> authorEvents.maxBy { it.createdAt }.content }
+        peerNames + renames + (username to own)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     val items: StateFlow<List<TimelineItem>> = combine(
@@ -56,7 +63,9 @@ class TimelineViewModel(
     }
 
     fun setNickname(nickname: String) {
-        setOwnNickname(nickname)
+        val normalized = NicknamePacket.truncateToMaxBytes(nickname.trim())
+        setOwnNickname(normalized)
+        viewModelScope.launch { repository.changeUsername(normalized) }
     }
 
     fun clearLogs() {

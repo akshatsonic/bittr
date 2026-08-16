@@ -14,9 +14,16 @@ android {
         applicationId = "com.bitter"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.1.4"
+        versionCode = (project.findProperty("versionCode") as? String)?.toIntOrNull() ?: 5
+        versionName = (project.findProperty("versionName") as? String) ?: "0.1.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            // release is signed with the debug key so the APK is installable
+            // without a production keystore. Replace for real distribution.
+        }
     }
 
     buildTypes {
@@ -24,6 +31,7 @@ android {
             isTestCoverageEnabled = true
         }
         release {
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -43,6 +51,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     testOptions {
@@ -68,7 +77,8 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.timber)
+
+    debugImplementation(libs.timber)
 
     debugImplementation(libs.hyperion.core)
     debugImplementation(libs.hyperion.timber)

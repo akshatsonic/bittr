@@ -17,7 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import com.bitter.log.Log
 import java.util.UUID
 
 class GattServerHandler(
@@ -36,7 +36,7 @@ class GattServerHandler(
 
     fun start() {
         val ok = gattServer.addService(buildService())
-        Timber.d("GATT server service added: $ok")
+        Log.d("GATT server service added: $ok")
     }
 
     fun close() {
@@ -89,7 +89,7 @@ class GattServerHandler(
     private val callback = object : BluetoothGattServerCallback() {
 
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
-            Timber.d("GATT server connection state: device=%s status=%d newState=%d", device.address, status, newState)
+            Log.d("GATT server connection state: device=%s status=%d newState=%d", device.address, status, newState)
         }
 
         override fun onCharacteristicWriteRequest(
@@ -101,7 +101,7 @@ class GattServerHandler(
             offset: Int,
             value: ByteArray,
         ) {
-            Timber.v("GATT write request: device=%s char=%s len=%d", device.address, characteristic.uuid, value.size)
+            Log.v("GATT write request: device=%s char=%s len=%d", device.address, characteristic.uuid, value.size)
             when (characteristic.uuid) {
                 BleProtocol.CHAR_MERKLE_QUERY -> handleQuery(device, value)
                 BleProtocol.CHAR_EVENT_FETCH -> handleEventFetchWrite(device, value)
@@ -140,7 +140,7 @@ class GattServerHandler(
             offset: Int,
             value: ByteArray,
         ) {
-            Timber.d("GATT CCCD descriptor write: device=%s uuid=%s", device.address, descriptor.uuid)
+            Log.d("GATT CCCD descriptor write: device=%s uuid=%s", device.address, descriptor.uuid)
             if (responseNeeded) {
                 gattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
             }
@@ -151,10 +151,10 @@ class GattServerHandler(
         val announce = BleProtocol.decodeIdentityAnnounce(value)
         if (announce != null) {
             val (deviceId, peerUsername) = announce
-            Timber.d("GATT identity write received: deviceId=%08x username=%s", deviceId, peerUsername)
+            Log.d("GATT identity write received: deviceId=%08x username=%s", deviceId, peerUsername)
             onPeerIdentity(deviceId, peerUsername)
         } else {
-            Timber.w("GATT identity write decoded to null announce")
+            Log.w("GATT identity write decoded to null announce")
         }
     }
 
@@ -168,14 +168,14 @@ class GattServerHandler(
                 scope.launch { notify(device, characteristic, BleProtocol.encodeNodeHashAnswer(query.lo, query.hi, hash)) }
             }
             BleProtocol.Query.LeafCount -> {
-                Timber.d("GATT leafCount query answered: %d", peer.leafCount)
+                Log.d("GATT leafCount query answered: %d", peer.leafCount)
                 scope.launch { notify(device, characteristic, BleProtocol.encodeLeafCountAnswer(peer.leafCount)) }
             }
             BleProtocol.Query.AllEvents -> {
-                Timber.d("GATT all-events query: streaming %d events", peer.allEvents().size)
+                Log.d("GATT all-events query: streaming %d events", peer.allEvents().size)
                 streamEvents(device, peer.allEvents())
             }
-            null -> Timber.w("GATT unknown merkle query: %s", payload.size)
+            null -> Log.w("GATT unknown merkle query: %s", payload.size)
         }
     }
 
@@ -189,13 +189,13 @@ class GattServerHandler(
                     val eventBytes = BleProtocol.decodePush(frame)
                     val event = eventBytes?.let { EventWireCodec.decode(it) }
                     if (event != null) {
-                        Timber.d("GATT push received event id=%s author=%s", event.id.take(8), event.author)
+                        Log.d("GATT push received event id=%s author=%s", event.id.take(8), event.author)
                         onPushEvents(listOf(event))
                     } else {
-                        Timber.w("GATT push decoded to null event")
+                        Log.w("GATT push decoded to null event")
                     }
                 }
-                else -> Timber.w("GATT unknown EVENT_FETCH opcode: %d", op)
+                else -> Log.w("GATT unknown EVENT_FETCH opcode: %d", op)
             }
         }
     }
@@ -203,7 +203,7 @@ class GattServerHandler(
     private fun handleFetch(device: BluetoothDevice, payload: ByteArray) {
         val peer = serverProvider()
         val leaves = BleProtocol.decodeFetchRequest(payload) ?: return
-        Timber.d("GATT fetch request: %d leaves", leaves.size)
+        Log.d("GATT fetch request: %d leaves", leaves.size)
         streamEvents(device, peer.eventsForLeaves(leaves))
     }
 
@@ -233,7 +233,7 @@ class GattServerHandler(
                 attempts++
             }
             if (!sent) {
-                Timber.w("GATT notify failed after retries for device=%s", device.address)
+                Log.w("GATT notify failed after retries for device=%s", device.address)
                 return
             }
             offset = end
