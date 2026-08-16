@@ -61,12 +61,14 @@ object EventWireCodec {
         EventKind.POST -> 0
         EventKind.LIKE -> 1
         EventKind.UNLIKE -> 2
+        EventKind.CHANGE_USERNAME -> 3
     }
 
     private fun byteToKind(b: Byte): EventKind? = when (b.toInt()) {
         0 -> EventKind.POST
         1 -> EventKind.LIKE
         2 -> EventKind.UNLIKE
+        3 -> EventKind.CHANGE_USERNAME
         else -> null
     }
 }

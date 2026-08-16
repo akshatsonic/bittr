@@ -97,11 +97,13 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                     onClick = { selectedTab = 0 },
                     text = { Text("Timeline") },
                 )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    text = { Text("Logs") },
-                )
+                if (com.bitter.BuildConfig.DEBUG) {
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Logs") },
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(8.dp))
             if (selectedTab == 0) {
@@ -112,7 +114,10 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                     ownNickname = ownNickname,
                     panelExpanded = panelExpanded,
                     onTogglePanel = { panelExpanded = !panelExpanded },
-                    onNicknameChange = viewModel::setNickname,
+                    onNicknameChange = {
+                        viewModel.setNickname(it)
+                        panelExpanded = false
+                    },
                     draft = draft,
                     onDraftChange = { newValue ->
                         if (newValue.length <= Event.MAX_CONTENT_LENGTH) {

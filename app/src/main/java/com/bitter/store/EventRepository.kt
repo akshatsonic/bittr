@@ -32,6 +32,13 @@ class EventRepository(
         return event
     }
 
+    suspend fun changeUsername(newName: String): Event {
+        require(newName.isNotBlank()) { "name must not be blank" }
+        val event = Event.create(EventKind.CHANGE_USERNAME, username, newName, null, clock())
+        store.insertAll(listOf(event), dayKeyOf(event.createdAt))
+        return event
+    }
+
     suspend fun applyRemote(events: List<Event>): Int {
         val valid = events.filter { Event.verify(it) }
         var inserted = 0
