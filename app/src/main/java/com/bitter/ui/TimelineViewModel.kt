@@ -8,12 +8,14 @@ import com.bitter.log.LogStore
 import com.bitter.mesh.MeshStatus
 import com.bitter.mesh.MeshStatusStore
 import com.bitter.mesh.NicknameRegistry
+import com.bitter.model.Mention
 import com.bitter.store.EventRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -48,6 +50,13 @@ class TimelineViewModel(
             .mapValues { (_, authorEvents) -> authorEvents.maxBy { it.createdAt }.content }
         peerNames + renameMap + (username to own)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val candidates: StateFlow<List<Mention.Candidate>> = displayNames
+        .map { names ->
+            names.map { (username, display) -> Mention.Candidate(username, display) }
+                .sortedBy { it.displayName.lowercase() }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val hasMore: StateFlow<Boolean> = combine(
         loadedCount,

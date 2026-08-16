@@ -1,19 +1,24 @@
 package com.bitter.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -39,15 +44,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.LinkInteractionListener
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.bitter.log.LogEntry
 import com.bitter.log.LogStore
 import com.bitter.mesh.PeerInfo
 import com.bitter.model.Event
+import com.bitter.model.Mention
 import com.bitter.ble.NicknamePacket
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
@@ -61,7 +83,9 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     val meshState by viewModel.meshState.collectAsState()
     val ownNickname by viewModel.ownNickname.collectAsState()
     val logEntries by viewModel.logEntries.collectAsState()
-    var draft by remember { mutableStateOf("") }
+    val candidates by viewModel.candidates.collectAsState()
+    val displayNames by viewModel.displayNames.collectAsState()
+    var draft by remember { mutableStateOf(TextFieldValue("")) }
     var panelExpanded by remember { mutableStateOf(false) }
     var fingerprintTarget by remember { mutableStateOf<FingerprintTarget?>(null) }
     var likesTarget by remember { mutableStateOf<LikesTarget?>(null) }
@@ -124,16 +148,18 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                         panelExpanded = false
                     },
                     draft = draft,
+                    candidates = candidates,
+                    displayNames = displayNames,
                     onDraftChange = { newValue ->
-                        if (newValue.length <= Event.MAX_CONTENT_LENGTH) {
+                        if (newValue.text.length <= Event.MAX_CONTENT_LENGTH) {
                             draft = newValue
                         }
                     },
                     onPost = {
-                        val content = draft.trim()
+                        val content = draft.text.trim()
                         if (content.isNotEmpty()) {
                             viewModel.post(content)
-                            draft = ""
+                            draft = TextFieldValue("")
                             scope.launch { listState.animateScrollToItem(0) }
                         }
                     },
@@ -153,7 +179,7 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                     },
                     onFingerprint = { username ->
                         fingerprintTarget = FingerprintTarget(
-                            displayName = viewModel.displayNames.value[username] ?: username,
+                            displayName = displayNames[username] ?: username,
                             username = username,
                             deviceId = viewModel.fingerprintFor(username),
                         )
@@ -180,7 +206,7 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
             target = target,
             onFingerprint = { username ->
                 fingerprintTarget = FingerprintTarget(
-                    displayName = viewModel.displayNames.value[username] ?: username,
+                    displayName = displayNames[username] ?: username,
                     username = username,
                     deviceId = viewModel.fingerprintFor(username),
                 )
@@ -201,8 +227,10 @@ private fun TimelineTab(
     panelExpanded: Boolean,
     onTogglePanel: () -> Unit,
     onNicknameChange: (String) -> Unit,
-    draft: String,
-    onDraftChange: (String) -> Unit,
+    draft: TextFieldValue,
+    candidates: List<Mention.Candidate>,
+    displayNames: Map<String, String>,
+    onDraftChange: (TextFieldValue) -> Unit,
     onPost: () -> Unit,
     onLike: (TimelineItem) -> Unit,
     onShowLikers: (TimelineItem) -> Unit,
@@ -236,6 +264,7 @@ private fun TimelineTab(
             items(items, key = { it.post.id }) { item ->
                 PostCard(
                     item = item,
+                    displayNames = displayNames,
                     onLike = { onLike(item) },
                     onShowLikers = { onShowLikers(item) },
                     onFingerprint = onFingerprint,
@@ -246,23 +275,24 @@ private fun TimelineTab(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
         ) {
-            OutlinedTextField(
+            MentionComposer(
                 value = draft,
+                candidates = candidates,
+                displayNames = displayNames,
                 onValueChange = onDraftChange,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("What's happening?") },
             )
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = onPost,
-                enabled = draft.isNotBlank(),
+                enabled = draft.text.isNotBlank(),
             ) {
                 Text("Post")
             }
         }
-        val remaining = Event.MAX_CONTENT_LENGTH - draft.length
+        val remaining = Event.MAX_CONTENT_LENGTH - draft.text.length
         Text(
             text = "$remaining",
             style = MaterialTheme.typography.labelSmall,
@@ -280,6 +310,153 @@ private fun charCountColor(remaining: Int, max: Int = Event.MAX_CONTENT_LENGTH):
         remaining < 10 -> Color(0xFFD32F2F)
         ratio > 0.5f -> lerp(Color(0xFFF9A825), Color(0xFF2E7D32), (ratio - 0.5f) * 2f)
         else -> lerp(Color(0xFFD32F2F), Color(0xFFF9A825), ratio * 2f)
+    }
+}
+
+private class MentionTransformation(
+    private val resolve: (String) -> String,
+    private val chipStyle: SpanStyle,
+) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val v = Mention.visualize(text.text, resolve)
+        val styled = buildAnnotatedString {
+            append(v.text)
+            for (range in v.mentionRanges) {
+                addStyle(chipStyle, range.first, range.last + 1)
+            }
+        }
+        return TransformedText(
+            styled,
+            object : OffsetMapping {
+                override fun originalToTransformed(offset: Int): Int =
+                    v.originalToTransformed[offset.coerceIn(0, v.originalToTransformed.lastIndex)]
+
+                override fun transformedToOriginal(offset: Int): Int =
+                    v.transformedToOriginal[offset.coerceIn(0, v.transformedToOriginal.lastIndex)]
+            },
+        )
+    }
+}
+
+@Composable
+private fun MentionComposer(
+    value: TextFieldValue,
+    candidates: List<Mention.Candidate>,
+    displayNames: Map<String, String>,
+    onValueChange: (TextFieldValue) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val resolve: (String) -> String = { username -> displayNames[username] ?: username }
+    val chipStyle = SpanStyle(
+        color = MaterialTheme.colorScheme.primary,
+        background = MaterialTheme.colorScheme.primaryContainer,
+        fontWeight = FontWeight.Bold,
+    )
+
+    val active = remember(value.text, value.selection) {
+        Mention.activeMention(value.text, value.selection.start)
+    }
+    val filtered = remember(active?.query, candidates) {
+        Mention.filter(candidates, active?.query ?: "")
+    }
+
+    Column(modifier = modifier) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.Backspace) {
+                        val sel = value.selection
+                        if (sel.collapsed && sel.start > 0) {
+                            val updated = Mention.deleteBefore(value.text, sel.start)
+                            if (updated != value.text) {
+                                val removed = value.text.length - updated.length
+                                onValueChange(TextFieldValue(updated, TextRange(sel.start - removed)))
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                    }
+                    false
+                },
+            visualTransformation = MentionTransformation(resolve, chipStyle),
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+            decorationBox = { inner ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                ) {
+                    if (value.text.isEmpty()) {
+                        Text(
+                            text = "What's happening?",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+        if (active != null) {
+            MentionDropdown(
+                candidates = filtered,
+                onSelect = { candidate ->
+                    val updated = Mention.insert(value.text, active, candidate.username)
+                    val cursor = active.range.first + Mention.token(candidate.username).length
+                    onValueChange(TextFieldValue(updated, TextRange(cursor)))
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MentionDropdown(
+    candidates: List<Mention.Candidate>,
+    onSelect: (Mention.Candidate) -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp)
+            .heightIn(max = 200.dp),
+        shape = RoundedCornerShape(8.dp),
+        tonalElevation = 3.dp,
+    ) {
+        if (candidates.isEmpty()) {
+            Text(
+                text = "No matches",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(12.dp),
+            )
+        } else {
+            LazyColumn {
+                items(candidates, key = { it.username }) { candidate ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(candidate) }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    ) {
+                        Text(
+                            text = "@${candidate.displayName}",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        if (candidate.displayName != candidate.username) {
+                            Text(
+                                text = candidate.username,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -561,6 +738,7 @@ private fun PeerRow(peer: PeerInfo) {
 @Composable
 private fun PostCard(
     item: TimelineItem,
+    displayNames: Map<String, String>,
     onLike: () -> Unit,
     onShowLikers: () -> Unit,
     onFingerprint: (String) -> Unit,
@@ -573,9 +751,10 @@ private fun PostCard(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.clickable { onFingerprint(item.post.author) },
             )
-            Text(
-                text = item.post.content,
-                style = MaterialTheme.typography.bodyLarge,
+            PostContent(
+                content = item.post.content,
+                displayNames = displayNames,
+                onFingerprint = onFingerprint,
             )
             Text(
                 text = TimeFormatter.format(item.post.createdAt),
@@ -605,6 +784,45 @@ private fun PostCard(
             }
         }
     }
+}
+
+@Composable
+private fun PostContent(
+    content: String,
+    displayNames: Map<String, String>,
+    onFingerprint: (String) -> Unit,
+) {
+    val chipStyle = SpanStyle(
+        color = MaterialTheme.colorScheme.primary,
+        background = MaterialTheme.colorScheme.primaryContainer,
+        fontWeight = FontWeight.Bold,
+    )
+    val listener = LinkInteractionListener { link ->
+        if (link is LinkAnnotation.Clickable) {
+            onFingerprint(link.tag)
+        }
+    }
+    val annotated = buildAnnotatedString {
+        for (segment in Mention.parse(content)) {
+            when (segment) {
+                is Mention.Segment.Text -> append(segment.text)
+                is Mention.Segment.Mention -> {
+                    val start = length
+                    append("@${displayNames[segment.username] ?: segment.username}")
+                    addLink(
+                        LinkAnnotation.Clickable(
+                            tag = segment.username,
+                            styles = TextLinkStyles(style = chipStyle),
+                            linkInteractionListener = listener,
+                        ),
+                        start,
+                        length,
+                    )
+                }
+            }
+        }
+    }
+    Text(text = annotated, style = MaterialTheme.typography.bodyLarge)
 }
 
 private const val LOAD_MORE_THRESHOLD = 5
