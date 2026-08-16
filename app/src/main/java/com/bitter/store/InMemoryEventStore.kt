@@ -34,6 +34,9 @@ class InMemoryEventStore : EventStore {
             rows.filter { it.dayKey == dayKey }.map { it.event }.sortedBy { it.createdAt }
         }
 
+    override fun observeAll(): Flow<List<Event>> =
+        state.map { rows -> rows.map { it.event }.sortedBy { it.createdAt } }
+
     override suspend fun leavesForDay(dayKey: String): List<ByteArray> =
         eventsForDay(dayKey).map { MerkleTree.leafOf(it.id) }.sortedWith(Bytes)
 

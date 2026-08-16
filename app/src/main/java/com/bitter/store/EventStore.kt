@@ -7,6 +7,7 @@ interface EventStore {
     suspend fun insertAll(events: List<Event>, dayKey: String)
     suspend fun eventsForDay(dayKey: String): List<Event>
     fun observeDay(dayKey: String): Flow<List<Event>>
+    fun observeAll(): Flow<List<Event>>
     suspend fun leavesForDay(dayKey: String): List<ByteArray>
     suspend fun countForDay(dayKey: String): Int
 }

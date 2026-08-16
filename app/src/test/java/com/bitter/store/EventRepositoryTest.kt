@@ -120,6 +120,21 @@ class EventRepositoryTest {
     }
 
     @Test
+    fun `observe timeline spans multiple days`() = runTest {
+        val store = InMemoryEventStore()
+        store.insertAll(
+            listOf(
+                Event.create(EventKind.POST, "alice", "yesterday", null, fixedClock() - 86_400_000L),
+                Event.create(EventKind.POST, "alice", "today", null, fixedClock()),
+            ),
+            "irrelevant",
+        )
+        val repo = EventRepository(store, "alice", clock = fixedClock, dayKeyOf = { "2026-01-14" })
+        val events = repo.observeTimeline().first()
+        assertEquals(listOf("yesterday", "today"), events.map { it.content })
+    }
+
+    @Test
     fun `today leaves are sorted and match the stored events`() = runTest {
         val store = InMemoryEventStore()
         val repo = repo("alice", store)
