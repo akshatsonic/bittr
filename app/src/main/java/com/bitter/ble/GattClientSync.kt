@@ -47,12 +47,20 @@ class GattClientSync(
     private var mtuReady = false
 
     @Volatile
-    private var cccdTarget = 0
+    private var mtuHandled = false
+
+    @Volatile
+    private var notificationsStarted = false
+
+    @Volatile
+    private var notificationsDone = false
+
+    private val cccdQueue = ArrayDeque<BluetoothGattCharacteristic>()
 
     @Volatile
     private var cccdCompleted = 0
 
-    private val cccdQueue = ArrayDeque<BluetoothGattCharacteristic>()
+    private val notificationLock = Any()
 
     @Volatile
     private var writeLatch = CountDownLatch(0)
@@ -75,21 +83,25 @@ class GattClientSync(
                 ready.countDown()
                 return
             }
-            if (!g.requestMtu(512)) {
-                Log.w("GATT requestMtu returned false, using default MTU")
-                mtu = DEFAULT_MTU
-                mtuReady = true
-                enableNotifications(g)
-                maybeReady()
-            } else {
-                scope.launch {
-                    delay(MTU_TIMEOUT_MS)
-                    if (!mtuReady) {
-                        Log.w("GATT MTU exchange timed out, falling back to default MTU")
-                        mtu = DEFAULT_MTU
-                        mtuReady = true
-                        gatt?.let { enableNotifications(it) }
-                        maybeReady()
+            synchronized(notificationLock) {
+                if (mtuHandled) return
+                mtuHandled = true
+                if (!g.requestMtu(512)) {
+                    Log.w("GATT requestMtu returned false, using default MTU")
+                    mtu = DEFAULT_MTU
+                    mtuReady = true
+                    enableNotifications(g)
+                    maybeReady()
+                } else {
+                    scope.launch {
+                        delay(MTU_TIMEOUT_MS)
+                        if (!mtuReady) {
+                            Log.w("GATT MTU exchange timed out, falling back to default MTU")
+                            mtu = DEFAULT_MTU
+                            mtuReady = true
+                            gatt?.let { enableNotifications(it) }
+                            maybeReady()
+                        }
                     }
                 }
             }
@@ -97,19 +109,26 @@ class GattClientSync(
 
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
             Log.d("GATT MTU changed: mtu=%d status=%d", mtu, status)
-            this@GattClientSync.mtu = if (status == BluetoothGatt.GATT_SUCCESS) mtu else DEFAULT_MTU
-            mtuReady = true
-            enableNotifications(g)
-            maybeReady()
+            synchronized(notificationLock) {
+                mtuHandled = true
+                this@GattClientSync.mtu = if (status == BluetoothGatt.GATT_SUCCESS) mtu else DEFAULT_MTU
+                mtuReady = true
+                enableNotifications(g)
+                maybeReady()
+            }
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
             Log.d("GATT descriptor write confirmed: uuid=%s status=%d", descriptor.uuid, status)
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                cccdCompleted++
+            synchronized(notificationLock) {
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    cccdCompleted++
+                } else {
+                    Log.w("GATT descriptor write failed status=%d, continuing", status)
+                }
+                writeNextCccdLocked(g)
+                maybeReady()
             }
-            writeNextCccd(g)
-            maybeReady()
         }
 
         override fun onCharacteristicChanged(
@@ -145,8 +164,9 @@ class GattClientSync(
             writeLatch.countDown()
         }
     }
+
     private fun maybeReady() {
-        if (mtuReady && cccdTarget > 0 && cccdCompleted >= cccdTarget) {
+        if (mtuReady && notificationsDone) {
             ready.countDown()
         }
     }
@@ -158,7 +178,7 @@ class GattClientSync(
         return true
     }
 
-    fun awaitReady(timeoutMs: Long): Boolean = ready.await(timeoutMs, TimeUnit.MILLISECONDS) && cccdCompleted >= cccdTarget && cccdTarget > 0
+    fun awaitReady(timeoutMs: Long): Boolean = ready.await(timeoutMs, TimeUnit.MILLISECONDS) && mtuReady
 
     fun readIdentity(timeoutMs: Long = TIMEOUT_SECONDS * 1000): String? {
         val g = gatt ?: return null
@@ -184,36 +204,63 @@ class GattClientSync(
     }
 
     private fun enableNotifications(g: BluetoothGatt) {
-        val service = g.getService(BleProtocol.SERVICE_UUID) ?: return
-        cccdTarget = 0
-        cccdQueue.clear()
-        listOf(BleProtocol.CHAR_MERKLE_QUERY, BleProtocol.CHAR_EVENT_FETCH).forEach { uuid ->
-            service.getCharacteristic(uuid)?.let { cccdQueue.add(it) }
+        synchronized(notificationLock) {
+            if (notificationsStarted) return
+            notificationsStarted = true
+            val service = g.getService(BleProtocol.SERVICE_UUID) ?: run {
+                notificationsDone = true
+                maybeReady()
+                return
+            }
+            listOf(BleProtocol.CHAR_MERKLE_QUERY, BleProtocol.CHAR_EVENT_FETCH).forEach { uuid ->
+                service.getCharacteristic(uuid)?.let { cccdQueue.add(it) }
+            }
+            if (cccdQueue.isEmpty()) {
+                notificationsDone = true
+                maybeReady()
+                return
+            }
+            writeNextCccdLocked(g)
+            // Watchdog: never let CCCD writes stall the handshake.
+            scope.launch {
+                delay(NOTIFICATIONS_TIMEOUT_MS)
+                synchronized(notificationLock) {
+                    if (!notificationsDone) {
+                        Log.w("GATT notification enable timed out, proceeding anyway")
+                        notificationsDone = true
+                        maybeReady()
+                    }
+                }
+            }
         }
-        cccdTarget = cccdQueue.size
-        writeNextCccd(g)
     }
 
-    private fun writeNextCccd(g: BluetoothGatt) {
-        val characteristic = cccdQueue.pollFirst() ?: return
+    private fun writeNextCccdLocked(g: BluetoothGatt) {
+        val characteristic = cccdQueue.pollFirst() ?: run {
+            if (notificationsStarted) {
+                notificationsDone = true
+                maybeReady()
+            }
+            return
+        }
         val descriptor = characteristic.getDescriptor(cccdUuid)
         if (descriptor == null) {
             Log.w("GATT no CCCD descriptor for %s, counting as completed", characteristic.uuid)
             cccdCompleted++
-            writeNextCccd(g)
+            writeNextCccdLocked(g)
             return
         }
         if (!g.setCharacteristicNotification(characteristic, true)) {
             Log.w("GATT setCharacteristicNotification returned false for %s", characteristic.uuid)
             cccdCompleted++
-            writeNextCccd(g)
+            writeNextCccdLocked(g)
             return
         }
         descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
         if (!g.writeDescriptor(descriptor)) {
             Log.w("GATT writeDescriptor returned false for %s, counting as completed", characteristic.uuid)
             cccdCompleted++
-            writeNextCccd(g)
+            writeNextCccdLocked(g)
         }
     }
 
@@ -309,5 +356,6 @@ class GattClientSync(
         const val WRITE_TIMEOUT_SECONDS = 8L
         const val DEFAULT_MTU = 23
         const val MTU_TIMEOUT_MS = 2_000L
+        const val NOTIFICATIONS_TIMEOUT_MS = 3_000L
     }
 }
