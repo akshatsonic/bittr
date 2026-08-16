@@ -50,7 +50,7 @@ class EventRepository(
         return inserted
     }
 
-    fun observeTimeline(): Flow<List<Event>> = store.observeDay(todayKey())
+    fun observeTimeline(): Flow<List<Event>> = store.observeAll()
 
     fun todayKey(): String = dayKeyOf(clock())
 

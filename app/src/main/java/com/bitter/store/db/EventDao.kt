@@ -18,6 +18,9 @@ interface EventDao {
     @Query("SELECT * FROM events WHERE dayKey = :dayKey ORDER BY createdAt ASC")
     fun observeDay(dayKey: String): Flow<List<EventEntity>>
 
+    @Query("SELECT * FROM events ORDER BY createdAt ASC")
+    fun observeAll(): Flow<List<EventEntity>>
+
     @Query("SELECT COUNT(*) FROM events WHERE dayKey = :dayKey")
     suspend fun countForDay(dayKey: String): Int
 }
