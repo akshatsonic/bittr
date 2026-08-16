@@ -22,6 +22,17 @@ class RoomEventStore(private val dao: EventDao) : EventStore {
     override fun observeAll(): Flow<List<Event>> =
         dao.observeAll().map { rows -> rows.mapNotNull { it.toEvent() } }
 
+    override fun observePosts(limit: Int): Flow<List<Event>> =
+        dao.observePosts(limit).map { rows -> rows.mapNotNull { it.toEvent() } }
+
+    override fun observeInteractions(): Flow<List<Event>> =
+        dao.observeInteractions().map { rows -> rows.mapNotNull { it.toEvent() } }
+
+    override fun observeRenames(): Flow<List<Event>> =
+        dao.observeRenames().map { rows -> rows.mapNotNull { it.toEvent() } }
+
+    override fun observePostCount(): Flow<Int> = dao.observePostCount()
+
     override suspend fun leavesForDay(dayKey: String): List<ByteArray> =
         eventsForDay(dayKey).map { MerkleTree.leafOf(it.id) }.sortedWith(Bytes)
 

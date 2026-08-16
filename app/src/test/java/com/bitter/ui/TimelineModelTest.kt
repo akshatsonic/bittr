@@ -18,9 +18,17 @@ class TimelineModelTest {
     private fun unlike(author: String, target: String, at: Long) =
         Event.create(EventKind.UNLIKE, author, "", target, at)
 
+    private fun build(events: List<Event>, displayNames: Map<String, String> = emptyMap(), myUsername: String? = null) =
+        TimelineModel.build(
+            posts = events.filter { it.kind == EventKind.POST },
+            interactions = events.filter { it.kind != EventKind.POST },
+            displayNames = displayNames,
+            myUsername = myUsername,
+        )
+
     @Test
     fun `posts render newest first`() {
-        val items = TimelineModel.build(listOf(post("a", "second", t0 + 1), post("a", "first", t0)))
+        val items = build(listOf(post("a", "second", t0 + 1), post("a", "first", t0)))
         assertEquals(listOf("second", "first"), items.map { it.post.content })
     }
 
@@ -28,7 +36,7 @@ class TimelineModelTest {
     fun `likes attach to their parent post`() {
         val p = post("a", "hello", t0)
         val l = like("b", p.id, t0 + 1)
-        val items = TimelineModel.build(listOf(p, l))
+        val items = build(listOf(p, l))
         assertEquals(1, items.size)
         assertEquals(listOf(l.id), items[0].likes.map { it.id })
     }
@@ -36,7 +44,7 @@ class TimelineModelTest {
     @Test
     fun `like on a missing parent is hidden until parent arrives`() {
         val orphanLike = like("b", "missing-parent-id", t0)
-        val items = TimelineModel.build(listOf(orphanLike))
+        val items = build(listOf(orphanLike))
         assertEquals(0, items.size)
     }
 
@@ -44,9 +52,9 @@ class TimelineModelTest {
     fun `like becomes visible once parent syncs in`() {
         val p = post("a", "hello", t0)
         val l = like("b", p.id, t0 + 1)
-        val hidden = TimelineModel.build(listOf(l))
+        val hidden = build(listOf(l))
         assertEquals(0, hidden.size)
-        val revealed = TimelineModel.build(listOf(l, p))
+        val revealed = build(listOf(l, p))
         assertEquals(listOf(l.id), revealed[0].likes.map { it.id })
     }
 
@@ -55,21 +63,21 @@ class TimelineModelTest {
         val p = post("a", "hello", t0)
         val l1 = like("b", p.id, t0 + 1)
         val l2 = like("c", p.id, t0 + 2)
-        val items = TimelineModel.build(listOf(p, l1, l2))
+        val items = build(listOf(p, l1, l2))
         assertEquals(setOf(l1.id, l2.id), items[0].likes.map { it.id }.toSet())
     }
 
     @Test
     fun `display name overrides author when mapped`() {
         val p = post("bob", "hello", t0)
-        val items = TimelineModel.build(listOf(p), displayNames = mapOf("bob" to "cool-cat"))
+        val items = build(listOf(p), displayNames = mapOf("bob" to "cool-cat"))
         assertEquals("cool-cat", items[0].displayAuthor)
     }
 
     @Test
     fun `author is used when no display name is mapped`() {
         val p = post("bob", "hello", t0)
-        val items = TimelineModel.build(listOf(p), displayNames = mapOf("alice" to "x"))
+        val items = build(listOf(p), displayNames = mapOf("alice" to "x"))
         assertEquals("bob", items[0].displayAuthor)
     }
 
@@ -77,7 +85,7 @@ class TimelineModelTest {
     fun `display name applies to likes too`() {
         val p = post("bob", "hello", t0)
         val l = like("alice", p.id, t0 + 1)
-        val items = TimelineModel.build(listOf(p, l), displayNames = mapOf("alice" to "a-nick"))
+        val items = build(listOf(p, l), displayNames = mapOf("alice" to "a-nick"))
         assertEquals("a-nick", items[0].displayLikes.single().author)
     }
 
@@ -86,7 +94,7 @@ class TimelineModelTest {
         val p = post("bob", "hello", t0)
         val l = like("alice", p.id, t0 + 1)
         val u = unlike("alice", p.id, t0 + 2)
-        val items = TimelineModel.build(listOf(p, l, u))
+        val items = build(listOf(p, l, u))
         assertEquals(0, items[0].likes.size)
     }
 
@@ -96,7 +104,7 @@ class TimelineModelTest {
         val l1 = like("alice", p.id, t0 + 1)
         val l2 = like("carol", p.id, t0 + 2)
         val u = unlike("alice", p.id, t0 + 3)
-        val items = TimelineModel.build(listOf(p, l1, l2, u))
+        val items = build(listOf(p, l1, l2, u))
         assertEquals(listOf("carol"), items[0].likes.map { it.author })
     }
 
@@ -104,7 +112,7 @@ class TimelineModelTest {
     fun `liked by me is true for my like`() {
         val p = post("bob", "hello", t0)
         val l = like("me", p.id, t0 + 1)
-        val items = TimelineModel.build(listOf(p, l), myUsername = "me")
+        val items = build(listOf(p, l), myUsername = "me")
         assertEquals(true, items[0].likedByMe)
     }
 
@@ -113,7 +121,7 @@ class TimelineModelTest {
         val p = post("bob", "hello", t0)
         val l = like("me", p.id, t0 + 1)
         val u = unlike("me", p.id, t0 + 2)
-        val items = TimelineModel.build(listOf(p, l, u), myUsername = "me")
+        val items = build(listOf(p, l, u), myUsername = "me")
         assertEquals(false, items[0].likedByMe)
     }
 
@@ -121,7 +129,7 @@ class TimelineModelTest {
     fun `liked by me is false for someone elses like`() {
         val p = post("bob", "hello", t0)
         val l = like("alice", p.id, t0 + 1)
-        val items = TimelineModel.build(listOf(p, l), myUsername = "me")
+        val items = build(listOf(p, l), myUsername = "me")
         assertEquals(false, items[0].likedByMe)
     }
 
@@ -131,7 +139,7 @@ class TimelineModelTest {
         val l1 = like("me", p.id, t0 + 1)
         val u = unlike("me", p.id, t0 + 2)
         val l2 = like("me", p.id, t0 + 3)
-        val items = TimelineModel.build(listOf(p, l1, u, l2), myUsername = "me")
+        val items = build(listOf(p, l1, u, l2), myUsername = "me")
         assertEquals(1, items[0].likes.size)
         assertEquals(true, items[0].likedByMe)
     }
@@ -143,7 +151,7 @@ class TimelineModelTest {
         val u1 = unlike("me", p.id, t0 + 2)
         val l2 = like("me", p.id, t0 + 3)
         val u2 = unlike("me", p.id, t0 + 4)
-        val items = TimelineModel.build(listOf(p, l1, u1, l2, u2), myUsername = "me")
+        val items = build(listOf(p, l1, u1, l2, u2), myUsername = "me")
         assertEquals(0, items[0].likes.size)
         assertEquals(false, items[0].likedByMe)
     }
@@ -153,7 +161,7 @@ class TimelineModelTest {
         val p = post("bob", "hello", t0)
         val u = unlike("me", p.id, t0 + 1)
         val l = like("me", p.id, t0 + 2)
-        val items = TimelineModel.build(listOf(p, u, l), myUsername = "me")
+        val items = build(listOf(p, u, l), myUsername = "me")
         assertEquals(1, items[0].likes.size)
         assertEquals(true, items[0].likedByMe)
     }

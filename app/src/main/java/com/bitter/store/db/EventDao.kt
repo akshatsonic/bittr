@@ -21,6 +21,18 @@ interface EventDao {
     @Query("SELECT * FROM events ORDER BY createdAt ASC")
     fun observeAll(): Flow<List<EventEntity>>
 
+    @Query("SELECT * FROM events WHERE kind = 'post' ORDER BY createdAt DESC LIMIT :limit")
+    fun observePosts(limit: Int): Flow<List<EventEntity>>
+
+    @Query("SELECT * FROM events WHERE kind IN ('like', 'unlike') ORDER BY createdAt ASC")
+    fun observeInteractions(): Flow<List<EventEntity>>
+
+    @Query("SELECT * FROM events WHERE kind = 'change_username' ORDER BY createdAt ASC")
+    fun observeRenames(): Flow<List<EventEntity>>
+
+    @Query("SELECT COUNT(*) FROM events WHERE kind = 'post'")
+    fun observePostCount(): Flow<Int>
+
     @Query("SELECT COUNT(*) FROM events WHERE dayKey = :dayKey")
     suspend fun countForDay(dayKey: String): Int
 }

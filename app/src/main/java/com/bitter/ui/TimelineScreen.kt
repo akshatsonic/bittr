@@ -27,7 +27,9 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +57,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 @Composable
 fun TimelineScreen(viewModel: TimelineViewModel) {
     val items by viewModel.items.collectAsState()
+    val hasMore by viewModel.hasMore.collectAsState()
     val meshState by viewModel.meshState.collectAsState()
     val ownNickname by viewModel.ownNickname.collectAsState()
     val logEntries by viewModel.logEntries.collectAsState()
@@ -109,6 +112,8 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
             if (selectedTab == 0) {
                 TimelineTab(
                     items = items,
+                    hasMore = hasMore,
+                    onLoadMore = viewModel::loadMore,
                     listState = listState,
                     meshState = meshState,
                     ownNickname = ownNickname,
@@ -188,6 +193,8 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
 @Composable
 private fun TimelineTab(
     items: List<TimelineItem>,
+    hasMore: Boolean,
+    onLoadMore: () -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState,
     meshState: com.bitter.mesh.MeshStatus,
     ownNickname: String,
@@ -201,6 +208,16 @@ private fun TimelineTab(
     onShowLikers: (TimelineItem) -> Unit,
     onFingerprint: (String) -> Unit,
 ) {
+    val shouldLoadMore by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            hasMore && lastVisible >= layoutInfo.totalItemsCount - LOAD_MORE_THRESHOLD
+        }
+    }
+    LaunchedEffect(shouldLoadMore) {
+        if (shouldLoadMore) onLoadMore()
+    }
     Column {
         MeshStatusPanel(
             meshState = meshState,
@@ -257,8 +274,7 @@ private fun TimelineTab(
     }
 }
 
-private fun charCountColor(remaining: Int, max: Int = Event.MAX_CONTENT_LENGTH): Color {
-    val ratio = remaining.toFloat() / max
+private fun charCountColor(remaining: Int, max: Int = Event.MAX_CONTENT_LENGTH): Color {    val ratio = remaining.toFloat() / max
     return when {
         remaining <= 0 -> Color(0xFFD32F2F)
         remaining < 10 -> Color(0xFFD32F2F)
@@ -590,3 +606,5 @@ private fun PostCard(
         }
     }
 }
+
+private const val LOAD_MORE_THRESHOLD = 5
