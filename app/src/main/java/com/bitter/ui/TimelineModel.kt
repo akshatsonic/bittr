@@ -13,15 +13,16 @@ data class TimelineItem(
 
 object TimelineModel {
     fun build(
-        events: List<Event>,
+        posts: List<Event>,
+        interactions: List<Event>,
         displayNames: Map<String, String> = emptyMap(),
         myUsername: String? = null,
     ): List<TimelineItem> {
-        val posts = events.filter { it.kind == EventKind.POST }.sortedByDescending { it.createdAt }
-        val likesByTarget = events
+        val sortedPosts = posts.filter { it.kind == EventKind.POST }.sortedByDescending { it.createdAt }
+        val likesByTarget = interactions
             .filter { it.kind == EventKind.LIKE && it.targetEventId != null }
             .groupBy { it.targetEventId }
-        val unlikesByTarget = events
+        val unlikesByTarget = interactions
             .filter { it.kind == EventKind.UNLIKE && it.targetEventId != null }
             .groupBy { it.targetEventId }
 
@@ -42,7 +43,7 @@ object TimelineModel {
 
         fun display(author: String): String = displayNames[author] ?: author
 
-        return posts.map { post ->
+        return sortedPosts.map { post ->
             val activeAuthors = activeLikersFor(post.id)
             val likes = activeAuthors.map { author ->
                 (likesByTarget[post.id] ?: emptyList())

@@ -8,14 +8,17 @@ import com.bitter.log.LogStore
 import com.bitter.mesh.MeshStatus
 import com.bitter.mesh.MeshStatusStore
 import com.bitter.mesh.NicknameRegistry
-import com.bitter.model.EventKind
 import com.bitter.store.EventRepository
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class TimelineViewModel(
     private val repository: EventRepository,
     val username: String,
@@ -27,28 +30,42 @@ class TimelineViewModel(
     private val logStore: LogStore,
 ) : ViewModel() {
 
+    private val pageSize = PAGE_SIZE
+
+    private val loadedCount = MutableStateFlow(pageSize)
+
     val meshState: StateFlow<MeshStatus> = meshStatus.status
 
     val logEntries: StateFlow<List<com.bitter.log.LogEntry>> = logStore.entries
 
     val displayNames: StateFlow<Map<String, String>> = combine(
-        repository.observeTimeline(),
+        repository.observeRenames(),
         nicknames.displayNames,
         ownNickname,
-    ) { events, peerNames, own ->
-        val renames = events
-            .filter { it.kind == EventKind.CHANGE_USERNAME }
+    ) { renames, peerNames, own ->
+        val renameMap = renames
             .groupBy { it.author }
             .mapValues { (_, authorEvents) -> authorEvents.maxBy { it.createdAt }.content }
-        peerNames + renames + (username to own)
+        peerNames + renameMap + (username to own)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    val hasMore: StateFlow<Boolean> = combine(
+        loadedCount,
+        repository.observePostCount(),
+    ) { loaded, total -> loaded < total }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     val items: StateFlow<List<TimelineItem>> = combine(
-        repository.observeTimeline(),
+        loadedCount.flatMapLatest { limit -> repository.observePosts(limit) },
+        repository.observeInteractions(),
         displayNames,
-    ) { events, names ->
-        TimelineModel.build(events, names, username)
+    ) { posts, interactions, names ->
+        TimelineModel.build(posts, interactions, names, username)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun loadMore() {
+        loadedCount.update { it + pageSize }
+    }
 
     fun post(content: String) {
         viewModelScope.launch { repository.post(content) }
@@ -74,6 +91,10 @@ class TimelineViewModel(
 
     fun fingerprintFor(username: String): Int? =
         if (username == this.username) deviceId else nicknames.deviceIdFor(username)
+
+    private companion object {
+        const val PAGE_SIZE = 20
+    }
 }
 
 class TimelineViewModelFactory(

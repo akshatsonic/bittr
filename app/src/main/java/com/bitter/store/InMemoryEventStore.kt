@@ -37,6 +37,31 @@ class InMemoryEventStore : EventStore {
     override fun observeAll(): Flow<List<Event>> =
         state.map { rows -> rows.map { it.event }.sortedBy { it.createdAt } }
 
+    override fun observePosts(limit: Int): Flow<List<Event>> =
+        state.map { rows ->
+            rows.map { it.event }
+                .filter { it.kind == com.bitter.model.EventKind.POST }
+                .sortedByDescending { it.createdAt }
+                .take(limit)
+        }
+
+    override fun observeInteractions(): Flow<List<Event>> =
+        state.map { rows ->
+            rows.map { it.event }
+                .filter { it.kind == com.bitter.model.EventKind.LIKE || it.kind == com.bitter.model.EventKind.UNLIKE }
+                .sortedBy { it.createdAt }
+        }
+
+    override fun observeRenames(): Flow<List<Event>> =
+        state.map { rows ->
+            rows.map { it.event }
+                .filter { it.kind == com.bitter.model.EventKind.CHANGE_USERNAME }
+                .sortedBy { it.createdAt }
+        }
+
+    override fun observePostCount(): Flow<Int> =
+        state.map { rows -> rows.count { it.event.kind == com.bitter.model.EventKind.POST } }
+
     override suspend fun leavesForDay(dayKey: String): List<ByteArray> =
         eventsForDay(dayKey).map { MerkleTree.leafOf(it.id) }.sortedWith(Bytes)
 

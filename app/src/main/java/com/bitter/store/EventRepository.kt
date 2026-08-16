@@ -52,6 +52,14 @@ class EventRepository(
 
     fun observeTimeline(): Flow<List<Event>> = store.observeAll()
 
+    fun observePosts(limit: Int): Flow<List<Event>> = store.observePosts(limit)
+
+    fun observeInteractions(): Flow<List<Event>> = store.observeInteractions()
+
+    fun observeRenames(): Flow<List<Event>> = store.observeRenames()
+
+    fun observePostCount(): Flow<Int> = store.observePostCount()
+
     fun todayKey(): String = dayKeyOf(clock())
 
     suspend fun todayEvents(): List<Event> = store.eventsForDay(todayKey())
