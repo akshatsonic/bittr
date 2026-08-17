@@ -201,7 +201,9 @@ fun TimelineScreen(
                             if (content.isNotEmpty()) {
                                 viewModel.post(content)
                                 draft = TextFieldValue("")
-                                scope.launch { listState.animateScrollToItem(0) }
+                                if (items.isNotEmpty()) {
+                                    scope.launch { listState.animateScrollToItem(0) }
+                                }
                             }
                         },
                         onLike = { item ->
@@ -470,6 +472,16 @@ private fun MentionComposer(
     }
 
     Column(modifier = modifier) {
+        if (active != null) {
+            MentionDropdown(
+                candidates = filtered,
+                onSelect = { candidate ->
+                    val updated = Mention.insert(value.text, active, candidate.username)
+                    val cursor = active.range.first + Mention.token(candidate.username).length
+                    onValueChange(TextFieldValue(updated, TextRange(cursor)))
+                },
+            )
+        }
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
@@ -525,16 +537,6 @@ private fun MentionComposer(
                 }
             },
         )
-        if (active != null) {
-            MentionDropdown(
-                candidates = filtered,
-                onSelect = { candidate ->
-                    val updated = Mention.insert(value.text, active, candidate.username)
-                    val cursor = active.range.first + Mention.token(candidate.username).length
-                    onValueChange(TextFieldValue(updated, TextRange(cursor)))
-                },
-            )
-        }
     }
 }
 
@@ -546,7 +548,7 @@ private fun MentionDropdown(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp)
+            .padding(bottom = 4.dp)
             .heightIn(max = 200.dp),
         shape = RoundedCornerShape(12.dp),
         tonalElevation = 3.dp,
