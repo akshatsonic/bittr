@@ -8,6 +8,7 @@ import android.bluetooth.BluetoothGattServer
 import android.bluetooth.BluetoothGattServerCallback
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.Context
 import com.bitter.model.Event
 import com.bitter.model.EventWireCodec
@@ -26,6 +27,7 @@ class GattServerHandler(
     private val username: String,
     private val onPushEvents: (List<Event>) -> Unit,
     private val onPeerIdentity: (Int, String) -> Unit = { _, _ -> },
+    private val onConnectionChange: (Boolean) -> Unit = {},
 ) {
     private val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val gattServer: BluetoothGattServer by lazy { manager.openGattServer(context, callback) }
@@ -90,6 +92,10 @@ class GattServerHandler(
 
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             Log.d("GATT server connection state: device=%s status=%d newState=%d", device.address, status, newState)
+            if (newState != BluetoothProfile.STATE_CONNECTED) {
+                writeStreams.remove(device.address)
+            }
+            onConnectionChange(newState == BluetoothProfile.STATE_CONNECTED)
         }
 
         override fun onCharacteristicWriteRequest(

@@ -1,5 +1,8 @@
 name: Release
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -20,6 +23,7 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,10 +46,19 @@ jobs:
           VERSION_CODE: ${{ inputs.versionCode }}
         run: |
           ARGS="assembleRelease -PversionName=${VERSION}"
+
           if [ -n "${VERSION_CODE}" ]; then
             ARGS="${ARGS} -PversionCode=${VERSION_CODE}"
           fi
+
           ./gradlew ${ARGS}
+
+      - name: Rename release APK
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk \
+             "app/build/outputs/apk/release/bittr-v${VERSION}-release.apk"
 
       - name: Create release and upload APK
         env:
@@ -54,9 +67,13 @@ jobs:
           PRERELEASE: ${{ inputs.prerelease }}
         run: |
           PRE=""
-          if [ "${PRERELEASE}" = "true" ]; then PRE="--prerelease"; fi
+
+          if [ "${PRERELEASE}" = "true" ]; then
+            PRE="--prerelease"
+          fi
+
           gh release create "v${VERSION}" \
-            app/build/outputs/apk/release/app-release.apk#bittr-v${VERSION}-release.apk \
+            "app/build/outputs/apk/release/bittr-v${VERSION}-release.apk" \
             --title "Bittr v${VERSION}" \
             --notes "Release build (no logging). Signed with debug key for sideloading." \
             ${PRE}

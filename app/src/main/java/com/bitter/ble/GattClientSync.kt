@@ -70,10 +70,17 @@ class GattClientSync(
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             Log.d("GATT client state: device=%s status=%d newState=%d", g.device.address, status, newState)
-            if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
-                g.discoverServices()
-            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                ready.countDown()
+            when {
+                newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS -> {
+                    g.discoverServices()
+                }
+                newState == BluetoothProfile.STATE_CONNECTED -> {
+                    Log.w("GATT connected with error status=%d, failing fast", status)
+                    ready.countDown()
+                }
+                newState == BluetoothProfile.STATE_DISCONNECTED -> {
+                    ready.countDown()
+                }
             }
         }
 
@@ -175,6 +182,13 @@ class GattClientSync(
         val g = device.connectGatt(context, false, callback) ?: return false
         gatt = g
         Log.d("GATT connect initiated to %s", device.address)
+        scope.launch {
+            delay(CONNECT_WATCHDOG_MS)
+            if (ready.count > 0) {
+                Log.w("GATT connect/discover watchdog fired for %s", device.address)
+                ready.countDown()
+            }
+        }
         return true
     }
 
@@ -357,5 +371,6 @@ class GattClientSync(
         const val DEFAULT_MTU = 23
         const val MTU_TIMEOUT_MS = 2_000L
         const val NOTIFICATIONS_TIMEOUT_MS = 3_000L
+        const val CONNECT_WATCHDOG_MS = 6_000L
     }
 }

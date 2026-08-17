@@ -2,6 +2,9 @@ package com.bitter.store
 
 import com.bitter.model.Event
 import com.bitter.model.EventKind
+import com.bitter.model.Mention
+import com.bitter.notify.NoopNotifier
+import com.bitter.notify.Notifier
 import kotlinx.coroutines.flow.Flow
 
 class EventRepository(
@@ -9,6 +12,7 @@ class EventRepository(
     private val username: String,
     private val clock: () -> Long = System::currentTimeMillis,
     private val dayKeyOf: (Long) -> String = { DayKey.of(it) },
+    private val notifier: Notifier = NoopNotifier,
 ) {
     suspend fun post(content: String): Event {
         require(content.length <= Event.MAX_CONTENT_LENGTH) {
@@ -41,16 +45,39 @@ class EventRepository(
 
     suspend fun applyRemote(events: List<Event>): Int {
         val valid = events.filter { Event.verify(it) }
-        var inserted = 0
+        val inserted = mutableListOf<Event>()
         valid.groupBy { dayKeyOf(it.createdAt) }.forEach { (dayKey, group) ->
-            val before = store.countForDay(dayKey)
-            store.insertAll(group, dayKey)
-            inserted += store.countForDay(dayKey) - before
+            inserted += store.insertAll(group, dayKey)
         }
-        return inserted
+        inserted.forEach { event -> notifyIfRelevant(event) }
+        return inserted.size
+    }
+
+    private suspend fun notifyIfRelevant(event: Event) {
+        if (event.author == username) return
+        try {
+            when (event.kind) {
+                EventKind.POST -> {
+                    if (event.content.contains(Mention.token(username))) {
+                        notifier.onMention(event.author, event.content, event.id)
+                    }
+                }
+                EventKind.LIKE -> {
+                    val targetId = event.targetEventId
+                    if (targetId != null && store.findById(targetId)?.author == username) {
+                        notifier.onLike(event.author, targetId)
+                    }
+                }
+                else -> Unit
+            }
+        } catch (e: Exception) {
+            com.bitter.log.Log.w("notify skipped for event %s: %s", event.id.take(8), e.message ?: e.toString())
+        }
     }
 
     fun observeTimeline(): Flow<List<Event>> = store.observeAll()
+
+    fun observeToday(): Flow<List<Event>> = store.observeDay(todayKey())
 
     fun observePosts(limit: Int): Flow<List<Event>> = store.observePosts(limit)
 

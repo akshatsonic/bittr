@@ -1,36 +1,52 @@
 package com.bitter.ui
 
-import androidx.compose.animation.AnimatedVisibility
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -42,15 +58,19 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.LinkInteractionListener
@@ -64,9 +84,12 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.bitter.R
 import com.bitter.log.LogEntry
 import com.bitter.log.LogStore
+import com.bitter.mesh.MeshStatus
 import com.bitter.mesh.PeerInfo
 import com.bitter.model.Event
 import com.bitter.model.Mention
@@ -77,7 +100,15 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 
 @Composable
-fun TimelineScreen(viewModel: TimelineViewModel) {
+fun TimelineScreen(
+    viewModel: TimelineViewModel,
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+    focusEventId: String?,
+    onFocusConsumed: () -> Unit,
+    shouldPromptUsername: Boolean,
+    onUsernamePromptDone: () -> Unit,
+) {
     val items by viewModel.items.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
     val meshState by viewModel.meshState.collectAsState()
@@ -86,110 +117,126 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     val candidates by viewModel.candidates.collectAsState()
     val displayNames by viewModel.displayNames.collectAsState()
     var draft by remember { mutableStateOf(TextFieldValue("")) }
-    var panelExpanded by remember { mutableStateOf(false) }
     var fingerprintTarget by remember { mutableStateOf<FingerprintTarget?>(null) }
     var likesTarget by remember { mutableStateOf<LikesTarget?>(null) }
     var selectedTab by remember { mutableStateOf(0) }
+    var showUsernamePrompt by remember { mutableStateOf(shouldPromptUsername) }
     val listState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                ) {
-                    focusManager.clearFocus()
-                    keyboard?.hide()
-                },
-        ) {
-            Text(
-                text = "Bittr",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = "you are @${viewModel.username}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    text = { Text("Timeline") },
-                )
-                if (com.bitter.BuildConfig.DEBUG) {
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text("Logs") },
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            if (selectedTab == 0) {
-                TimelineTab(
-                    items = items,
-                    hasMore = hasMore,
-                    onLoadMore = viewModel::loadMore,
-                    listState = listState,
+    val ownUsername = viewModel.username
+    val ownDisplayName = displayNames[ownUsername] ?: ownUsername
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                modifier = Modifier.width(300.dp),
+                drawerShape = RoundedCornerShape(0.dp),
+                drawerContainerColor = if (isDarkTheme) BittrColors.DarkDrawer else MaterialTheme.colorScheme.surface,
+            ) {
+                DrawerContent(
                     meshState = meshState,
                     ownNickname = ownNickname,
-                    panelExpanded = panelExpanded,
-                    onTogglePanel = { panelExpanded = !panelExpanded },
-                    onNicknameChange = {
-                        viewModel.setNickname(it)
-                        panelExpanded = false
-                    },
-                    draft = draft,
-                    candidates = candidates,
-                    displayNames = displayNames,
-                    onDraftChange = { newValue ->
-                        if (newValue.text.length <= Event.MAX_CONTENT_LENGTH) {
-                            draft = newValue
-                        }
-                    },
-                    onPost = {
-                        val content = draft.text.trim()
-                        if (content.isNotEmpty()) {
-                            viewModel.post(content)
-                            draft = TextFieldValue("")
-                            scope.launch { listState.animateScrollToItem(0) }
-                        }
-                    },
-                    onLike = { item ->
-                        if (item.likedByMe) {
-                            viewModel.unlike(item.post.id)
-                        } else {
-                            viewModel.like(item.post.id)
-                        }
-                    },
-                    onShowLikers = { item ->
-                        likesTarget = LikesTarget(
-                            postId = item.post.id,
-                            likers = item.displayLikes.map { it.author },
-                            usernames = item.likes.map { it.author },
-                        )
-                    },
-                    onFingerprint = { username ->
-                        fingerprintTarget = FingerprintTarget(
-                            displayName = displayNames[username] ?: username,
-                            username = username,
-                            deviceId = viewModel.fingerprintFor(username),
-                        )
-                    },
+                    isDarkTheme = isDarkTheme,
+                    onNicknameChange = { viewModel.setNickname(it) },
+                    onToggleTheme = onToggleTheme,
+                    onClose = { scope.launch { drawerState.close() } },
                 )
-            } else {
-                LogsTab(
-                    entries = logEntries,
-                    onClear = viewModel::clearLogs,
+            }
+        },
+    ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    ) {
+                        focusManager.clearFocus()
+                        keyboard?.hide()
+                    },
+            ) {
+                AppHeader(
+                    ownDisplayName = ownDisplayName,
+                    ownUsername = ownUsername,
+                    meshState = meshState,
+                    onMeshClick = { scope.launch { drawerState.open() } },
                 )
+                TabRow(selectedTabIndex = selectedTab) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Timeline") },
+                    )
+                    if (com.bitter.BuildConfig.DEBUG) {
+                        Tab(
+                            selected = selectedTab == 1,
+                            onClick = { selectedTab = 1 },
+                            text = { Text("Logs") },
+                        )
+                    }
+                }
+                if (selectedTab == 0) {
+                    TimelineTab(
+                        items = items,
+                        hasMore = hasMore,
+                        onLoadMore = viewModel::loadMore,
+                        listState = listState,
+                        ownDisplayName = ownDisplayName,
+                        ownUsername = ownUsername,
+                        draft = draft,
+                        candidates = candidates,
+                        displayNames = displayNames,
+                        focusEventId = focusEventId,
+                        onFocusConsumed = onFocusConsumed,
+                        onDraftChange = { newValue ->
+                            if (newValue.text.length <= Event.MAX_CONTENT_LENGTH) {
+                                draft = newValue
+                            }
+                        },
+                        onPost = {
+                            val content = draft.text.trim()
+                            if (content.isNotEmpty()) {
+                                viewModel.post(content)
+                                draft = TextFieldValue("")
+                                if (items.isNotEmpty()) {
+                                    scope.launch { listState.animateScrollToItem(0) }
+                                }
+                            }
+                        },
+                        onLike = { item ->
+                            if (item.likedByMe) {
+                                viewModel.unlike(item.post.id)
+                            } else {
+                                viewModel.like(item.post.id)
+                            }
+                        },
+                        onShowLikers = { item ->
+                            likesTarget = LikesTarget(
+                                postId = item.post.id,
+                                likers = item.displayLikes.map { it.author },
+                                usernames = item.likes.map { it.author },
+                            )
+                        },
+                        onFingerprint = { username ->
+                            fingerprintTarget = FingerprintTarget(
+                                displayName = displayNames[username] ?: username,
+                                username = username,
+                                deviceId = viewModel.fingerprintFor(username),
+                            )
+                        },
+                    )
+                } else {
+                    LogsTab(
+                        entries = logEntries,
+                        onClear = viewModel::clearLogs,
+                    )
+                }
             }
         }
     }
@@ -214,6 +261,84 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
             onDismiss = { likesTarget = null },
         )
     }
+
+    if (showUsernamePrompt) {
+        UsernamePromptDialog(
+            currentUsername = ownNickname,
+            onSave = { newName ->
+                viewModel.setNickname(newName)
+                showUsernamePrompt = false
+                onUsernamePromptDone()
+            },
+            onDismiss = {
+                showUsernamePrompt = false
+                onUsernamePromptDone()
+            },
+        )
+    }
+}
+
+@Composable
+private fun AppHeader(
+    ownDisplayName: String,
+    ownUsername: String,
+    meshState: MeshStatus,
+    onMeshClick: () -> Unit,
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Avatar(
+                name = ownDisplayName,
+                seed = ownUsername,
+                size = 36.dp,
+                modifier = Modifier.clickable(onClick = onMeshClick),
+            )
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.ic_bittr_logo),
+                    contentDescription = "Bittr",
+                    modifier = Modifier.height(44.dp),
+                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground),
+                )
+            }
+            MeshStatusIndicator(meshState = meshState, onClick = onMeshClick)
+        }
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+        )
+    }
+}
+
+@Composable
+private fun MeshStatusIndicator(meshState: MeshStatus, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val dot = if (meshState.advertising) "\u25CF" else "\u25CB"
+        Text(
+            text = dot,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = "${meshState.peers.size}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable
@@ -222,14 +347,13 @@ private fun TimelineTab(
     hasMore: Boolean,
     onLoadMore: () -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState,
-    meshState: com.bitter.mesh.MeshStatus,
-    ownNickname: String,
-    panelExpanded: Boolean,
-    onTogglePanel: () -> Unit,
-    onNicknameChange: (String) -> Unit,
+    ownDisplayName: String,
+    ownUsername: String,
     draft: TextFieldValue,
     candidates: List<Mention.Candidate>,
     displayNames: Map<String, String>,
+    focusEventId: String?,
+    onFocusConsumed: () -> Unit,
     onDraftChange: (TextFieldValue) -> Unit,
     onPost: () -> Unit,
     onLike: (TimelineItem) -> Unit,
@@ -246,23 +370,27 @@ private fun TimelineTab(
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore) onLoadMore()
     }
+    LaunchedEffect(focusEventId, items) {
+        val focus = focusEventId ?: return@LaunchedEffect
+        val index = items.indexOfFirst { it.post.id == focus }
+        when {
+            index >= 0 -> {
+                listState.animateScrollToItem(index)
+                onFocusConsumed()
+            }
+            hasMore -> onLoadMore()
+            else -> onFocusConsumed()
+        }
+    }
     Column {
-        MeshStatusPanel(
-            meshState = meshState,
-            ownNickname = ownNickname,
-            expanded = panelExpanded,
-            onToggle = onTogglePanel,
-            onNicknameChange = onNicknameChange,
-        )
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(items, key = { it.post.id }) { item ->
-                PostCard(
+                PostRow(
                     item = item,
                     displayNames = displayNames,
                     onLike = { onLike(item) },
@@ -271,12 +399,18 @@ private fun TimelineTab(
                 )
             }
         }
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Top,
         ) {
+            Avatar(name = ownDisplayName, seed = ownUsername, size = 36.dp)
+            Spacer(modifier = Modifier.width(8.dp))
             MentionComposer(
                 value = draft,
                 candidates = candidates,
@@ -288,19 +422,11 @@ private fun TimelineTab(
             Button(
                 onClick = onPost,
                 enabled = draft.text.isNotBlank(),
+                modifier = Modifier.padding(top = 6.dp),
             ) {
                 Text("Post")
             }
         }
-        val remaining = Event.MAX_CONTENT_LENGTH - draft.text.length
-        Text(
-            text = "$remaining",
-            style = MaterialTheme.typography.labelSmall,
-            color = charCountColor(remaining),
-            modifier = Modifier
-                .align(Alignment.End)
-                .padding(top = 2.dp),
-        )
     }
 }
 
@@ -339,6 +465,12 @@ private class MentionTransformation(
 }
 
 @Composable
+private fun mentionStyle(): SpanStyle = SpanStyle(
+    color = MaterialTheme.colorScheme.primary,
+    fontWeight = FontWeight.SemiBold,
+)
+
+@Composable
 private fun MentionComposer(
     value: TextFieldValue,
     candidates: List<Mention.Candidate>,
@@ -347,11 +479,8 @@ private fun MentionComposer(
     modifier: Modifier = Modifier,
 ) {
     val resolve: (String) -> String = { username -> displayNames[username] ?: username }
-    val chipStyle = SpanStyle(
-        color = MaterialTheme.colorScheme.primary,
-        background = MaterialTheme.colorScheme.primaryContainer,
-        fontWeight = FontWeight.Bold,
-    )
+    val chipStyle = mentionStyle()
+    val remaining = Event.MAX_CONTENT_LENGTH - value.text.length
 
     val active = remember(value.text, value.selection) {
         Mention.activeMention(value.text, value.selection.start)
@@ -361,6 +490,16 @@ private fun MentionComposer(
     }
 
     Column(modifier = modifier) {
+        if (active != null) {
+            MentionDropdown(
+                candidates = filtered,
+                onSelect = { candidate ->
+                    val updated = Mention.insert(value.text, active, candidate.username)
+                    val cursor = active.range.first + Mention.token(candidate.username).length
+                    onValueChange(TextFieldValue(updated, TextRange(cursor)))
+                },
+            )
+        }
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
@@ -386,8 +525,12 @@ private fun MentionComposer(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                            RoundedCornerShape(20.dp),
+                        )
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
                 ) {
                     if (value.text.isEmpty()) {
                         Text(
@@ -396,20 +539,22 @@ private fun MentionComposer(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    inner()
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 18.dp),
+                    ) {
+                        inner()
+                    }
+                    Text(
+                        text = "$remaining",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = charCountColor(remaining),
+                        modifier = Modifier.align(Alignment.BottomEnd),
+                    )
                 }
             },
         )
-        if (active != null) {
-            MentionDropdown(
-                candidates = filtered,
-                onSelect = { candidate ->
-                    val updated = Mention.insert(value.text, active, candidate.username)
-                    val cursor = active.range.first + Mention.token(candidate.username).length
-                    onValueChange(TextFieldValue(updated, TextRange(cursor)))
-                },
-            )
-        }
     }
 }
 
@@ -421,9 +566,9 @@ private fun MentionDropdown(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp)
+            .padding(bottom = 4.dp)
             .heightIn(max = 200.dp),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(12.dp),
         tonalElevation = 3.dp,
     ) {
         if (candidates.isEmpty()) {
@@ -436,22 +581,31 @@ private fun MentionDropdown(
         } else {
             LazyColumn {
                 items(candidates, key = { it.username }) { candidate ->
-                    Column(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onSelect(candidate) }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            text = "@${candidate.displayName}",
-                            style = MaterialTheme.typography.bodyMedium,
+                        Avatar(
+                            name = candidate.displayName,
+                            seed = candidate.username,
+                            size = 28.dp,
                         )
-                        if (candidate.displayName != candidate.username) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
                             Text(
-                                text = candidate.username,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                text = "@${candidate.displayName}",
+                                style = MaterialTheme.typography.bodyMedium,
                             )
+                            if (candidate.displayName != candidate.username) {
+                                Text(
+                                    text = candidate.username,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
@@ -512,7 +666,7 @@ private fun LogRow(entry: LogEntry) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = "[${priorityChar(entry.priority)}] ${entry.tag} @ ${entry.timestamp}",
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.bodySmall,
             color = color,
             fontFamily = FontFamily.Monospace,
         )
@@ -591,111 +745,259 @@ private fun FingerprintDialog(target: FingerprintTarget, onDismiss: () -> Unit) 
 }
 
 @Composable
-private fun MeshStatusPanel(
-    meshState: com.bitter.mesh.MeshStatus,
-    ownNickname: String,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    onNicknameChange: (String) -> Unit,
+private fun UsernamePromptDialog(
+    currentUsername: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    var nicknameDraft by remember(ownNickname) { mutableStateOf(ownNickname) }
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onToggle),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val dot = if (meshState.advertising) "\u25CF" else "\u25CB"
+    var draft by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Set your username") },
+        text = {
+            Column {
                 Text(
-                    text = "$dot ${summaryLine(meshState)}  (${meshState.peers.size} peer${if (meshState.peers.size == 1) "" else "s"})",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    text = "You're currently using the default username \"$currentUsername\".",
+                    style = MaterialTheme.typography.bodyMedium,
                 )
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = if (expanded) "hide \u25B2" else "show \u25BC",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { newValue ->
+                        if (NicknamePacket.byteLength(newValue) <= NicknamePacket.MAX_NICKNAME_BYTES) {
+                            draft = newValue
+                        }
+                    },
+                    label = { Text("Your username") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-            AnimatedVisibility(visible = expanded) {
-                Column(modifier = Modifier.padding(top = 8.dp)) {
-                    Text(
-                        text = if (meshState.advertising) "Status: advertising" else "Status: not advertising",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    meshState.activeSync?.let { sync ->
-                        Text(
-                            text = "Status: ${
-                                when (sync.direction) {
-                                    "initiating" -> "initiating request to device %08x".format(sync.deviceId)
-                                    "serving" -> "serving request from device %08x".format(sync.deviceId)
-                                    else -> "syncing with device %08x".format(sync.deviceId)
-                                }
-                            }",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold,
-                        )
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(draft.trim().ifEmpty { currentUsername }) },
+                enabled = draft.isNotBlank(),
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Later") }
+        },
+    )
+}
+
+@Composable
+private fun DrawerContent(
+    meshState: MeshStatus,
+    ownNickname: String,
+    isDarkTheme: Boolean,
+    onNicknameChange: (String) -> Unit,
+    onToggleTheme: () -> Unit,
+    onClose: () -> Unit,
+) {
+    var nicknameDraft by remember(ownNickname) { mutableStateOf(ownNickname) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        Text(
+            text = "Bittr",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = if (meshState.advertising) "Status: advertising" else "Status: not advertising",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        meshState.activeSync?.let { sync ->
+            Text(
+                text = "Status: ${
+                    when (sync.direction) {
+                        "initiating" -> "initiating request to device %08x".format(sync.deviceId)
+                        "serving" -> "serving request from device %08x".format(sync.deviceId)
+                        else -> "syncing with device %08x".format(sync.deviceId)
                     }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 8.dp),
-                    ) {
-                        OutlinedTextField(
-                            value = nicknameDraft,
-                            onValueChange = { newValue ->
-                                if (NicknamePacket.byteLength(newValue) <= NicknamePacket.MAX_NICKNAME_BYTES) {
-                                    nicknameDraft = newValue
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            label = { Text("Your nickname") },
-                            singleLine = true,
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(onClick = { onNicknameChange(nicknameDraft.trim()) }) {
-                            Text("Save")
-                        }
+                }",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 12.dp),
+        ) {
+            OutlinedTextField(
+                value = nicknameDraft,
+                onValueChange = { newValue ->
+                    if (NicknamePacket.byteLength(newValue) <= NicknamePacket.MAX_NICKNAME_BYTES) {
+                        nicknameDraft = newValue
                     }
-                    val nickRemaining = NicknamePacket.MAX_NICKNAME_BYTES - NicknamePacket.byteLength(nicknameDraft)
-                    Text(
-                        text = "$nickRemaining",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = charCountColor(nickRemaining, NicknamePacket.MAX_NICKNAME_BYTES),
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .padding(top = 2.dp),
-                    )
-                    Text(
-                        text = "Nearby peers:",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                    if (meshState.peers.isEmpty()) {
-                        Text(
-                            text = "none in range",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        meshState.peers.forEach { peer ->
-                            PeerRow(peer)
-                        }
-                    }
-                }
+                },
+                modifier = Modifier.weight(1f),
+                label = { Text("Your nickname") },
+                singleLine = true,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = {
+                    onNicknameChange(nicknameDraft.trim())
+                    onClose()
+                },
+            ) {
+                Text("Save")
+            }
+        }
+        val nickRemaining = NicknamePacket.MAX_NICKNAME_BYTES - NicknamePacket.byteLength(nicknameDraft)
+        Text(
+            text = "$nickRemaining",
+            style = MaterialTheme.typography.labelSmall,
+            color = charCountColor(nickRemaining, NicknamePacket.MAX_NICKNAME_BYTES),
+            modifier = Modifier
+                .align(Alignment.End)
+                .padding(top = 2.dp),
+        )
+        Text(
+            text = "Appearance",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 16.dp),
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        ThemeSelector(isDarkTheme = isDarkTheme, onToggleTheme = onToggleTheme)
+        Text(
+            text = "Permissions",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 16.dp),
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        PermissionList()
+        Text(
+            text = "Nearby peers:",
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(top = 16.dp),
+        )
+        if (meshState.peers.isEmpty()) {
+            Text(
+                text = "none in range",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            meshState.peers.forEach { peer ->
+                PeerRow(peer)
             }
         }
     }
 }
 
-private fun summaryLine(meshState: com.bitter.mesh.MeshStatus): String = when {
-    meshState.activeSync != null && meshState.activeSync.direction == "initiating" ->
-        "initiating sync"
-    meshState.activeSync != null -> "syncing"
-    meshState.advertising -> "advertising"
-    else -> "idle"
+@Composable
+private fun ThemeSelector(isDarkTheme: Boolean, onToggleTheme: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(4.dp),
+    ) {
+        ThemeOption(
+            label = "Light",
+            iconRes = R.drawable.ic_sun,
+            selected = !isDarkTheme,
+            onClick = { if (isDarkTheme) onToggleTheme() },
+        )
+        ThemeOption(
+            label = "Dark",
+            iconRes = R.drawable.ic_moon,
+            selected = isDarkTheme,
+            onClick = { if (!isDarkTheme) onToggleTheme() },
+        )
+    }
+}
+
+@Composable
+private fun RowScope.ThemeOption(label: String, iconRes: Int, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = label,
+            tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private data class PermissionRow(val label: String, val granted: Boolean)
+
+@Composable
+private fun PermissionList() {
+    val context = LocalContext.current
+    val permissions = buildList {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(PermissionRow("Notifications", hasPermission(context, Manifest.permission.POST_NOTIFICATIONS)))
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val nearby = hasPermission(context, Manifest.permission.BLUETOOTH_CONNECT) &&
+                hasPermission(context, Manifest.permission.BLUETOOTH_SCAN)
+            add(PermissionRow("Nearby devices", nearby))
+        } else {
+            add(PermissionRow("Location", hasPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)))
+        }
+    }
+    Column {
+        permissions.forEach { row ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !row.granted) { openAppSettings(context) }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = row.label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = if (row.granted) "Granted" else "Not granted",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (row.granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+}
+
+private fun hasPermission(context: Context, permission: String): Boolean =
+    androidx.core.content.ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+
+private fun openAppSettings(context: Context) {
+    val intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.fromParts("package", context.packageName, null),
+    )
+    context.startActivity(intent)
 }
 
 @Composable
@@ -736,54 +1038,87 @@ private fun PeerRow(peer: PeerInfo) {
 }
 
 @Composable
-private fun PostCard(
+private fun PostRow(
     item: TimelineItem,
     displayNames: Map<String, String>,
     onLike: () -> Unit,
     onShowLikers: () -> Unit,
     onFingerprint: (String) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = "@${item.displayAuthor}",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+            Avatar(
+                name = item.displayAuthor,
+                seed = item.post.author,
+                size = 40.dp,
                 modifier = Modifier.clickable { onFingerprint(item.post.author) },
             )
-            PostContent(
-                content = item.post.content,
-                displayNames = displayNames,
-                onFingerprint = onFingerprint,
-            )
-            Text(
-                text = TimeFormatter.format(item.post.createdAt),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onLike) {
-                    Icon(
-                        imageVector = if (item.likedByMe) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = if (item.likedByMe) "Unlike" else "Like",
-                        tint = if (item.likedByMe) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = item.displayAuthor,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = postSubtitle(item),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable { onFingerprint(item.post.author) },
                     )
                 }
-                Text(
-                    text = "${item.likes.size}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .clickable(onClick = onShowLikers)
-                        .padding(4.dp),
+                Spacer(modifier = Modifier.width(2.dp))
+                PostContent(
+                    content = item.post.content,
+                    displayNames = displayNames,
+                    onFingerprint = onFingerprint,
                 )
+                Spacer(modifier = Modifier.width(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onLike, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            imageVector = if (item.likedByMe) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = if (item.likedByMe) "Unlike" else "Like",
+                            tint = if (item.likedByMe) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+                    Text(
+                        text = "${item.likes.size}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .clickable(onClick = onShowLikers)
+                            .padding(4.dp),
+                    )
+                }
             }
         }
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+        )
     }
+}
+
+private fun postSubtitle(item: TimelineItem): String = buildString {
+    if (item.displayAuthor != item.post.author) {
+        append("@${item.post.author} · ")
+    }
+    append(TimeFormatter.format(item.post.createdAt))
 }
 
 @Composable
@@ -792,11 +1127,7 @@ private fun PostContent(
     displayNames: Map<String, String>,
     onFingerprint: (String) -> Unit,
 ) {
-    val chipStyle = SpanStyle(
-        color = MaterialTheme.colorScheme.primary,
-        background = MaterialTheme.colorScheme.primaryContainer,
-        fontWeight = FontWeight.Bold,
-    )
+    val chipStyle = mentionStyle()
     val listener = LinkInteractionListener { link ->
         if (link is LinkAnnotation.Clickable) {
             onFingerprint(link.tag)

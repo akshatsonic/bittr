@@ -8,6 +8,7 @@ import com.bitter.log.LogStore
 import com.bitter.mesh.MeshCoordinator
 import com.bitter.mesh.MeshStatusStore
 import com.bitter.mesh.NicknameRegistry
+import com.bitter.notify.BittrNotifier
 import com.bitter.store.EventRepository
 import com.bitter.store.EventStore
 import com.bitter.store.db.BitterDatabase
@@ -35,6 +36,9 @@ class AppGraph(context: Context) {
     private val _ownNickname = MutableStateFlow(nickPref)
     val ownNickname: StateFlow<String> = _ownNickname
 
+    private val _darkTheme = MutableStateFlow(prefs.getBoolean(DARK_THEME_KEY, false))
+    val darkTheme: StateFlow<Boolean> = _darkTheme
+
     val nicknames: NicknameRegistry = NicknameRegistry()
 
     val meshStatus: MeshStatusStore = MeshStatusStore()
@@ -51,7 +55,13 @@ class AppGraph(context: Context) {
 
     val store: EventStore = RoomEventStore(database.eventDao())
 
-    val repository: EventRepository = EventRepository(store, username)
+    val repository: EventRepository = EventRepository(
+        store,
+        username,
+        notifier = BittrNotifier(context) { name ->
+            nicknames.displayNames.value[name] ?: name
+        },
+    )
 
     val coordinator: MeshCoordinator = MeshCoordinator(repository, deviceId)
 
@@ -59,6 +69,19 @@ class AppGraph(context: Context) {
         val normalized = com.bitter.ble.NicknamePacket.truncateToMaxBytes(nickname.trim())
         prefs.edit().putString("nickname", normalized).apply()
         _ownNickname.value = normalized
+    }
+
+    fun setDarkTheme(dark: Boolean) {
+        prefs.edit().putBoolean(DARK_THEME_KEY, dark).apply()
+        _darkTheme.value = dark
+    }
+
+    fun shouldPromptUsername(): Boolean =
+        !prefs.getBoolean(USERNAME_PROMPT_SHOWN_KEY, false) &&
+            ownNickname.value == defaultNickname(deviceId)
+
+    fun markUsernamePromptShown() {
+        prefs.edit().putBoolean(USERNAME_PROMPT_SHOWN_KEY, true).apply()
     }
 
     private fun loadOrCreateDeviceId(): Int {
@@ -79,5 +102,7 @@ class AppGraph(context: Context) {
 
     private companion object {
         const val LOG_PREFS_KEY = "logs_v1"
+        const val DARK_THEME_KEY = "dark_theme"
+        const val USERNAME_PROMPT_SHOWN_KEY = "username_prompt_shown"
     }
 }

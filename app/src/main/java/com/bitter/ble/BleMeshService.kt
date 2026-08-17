@@ -59,6 +59,9 @@ class BleMeshService : Service() {
     @Volatile
     private var meshLoopRunning = false
 
+    @Volatile
+    private var gattSessionActive = false
+
     private val advertiseCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
             Log.d("ADVERTISE started ok (mode=%d)", settingsInEffect.mode)
@@ -103,11 +106,21 @@ class BleMeshService : Service() {
             onPeerIdentity = { deviceId, username ->
                 scope.launch { graph.nicknames.recordUsername(deviceId, username) }
             },
+            onConnectionChange = { connected ->
+                if (connected) {
+                    gattSessionActive = true
+                    stopScanning()
+                    stopAdvertising()
+                } else {
+                    gattSessionActive = false
+                }
+                Log.d("GATT server session %s", if (connected) "active" else "ended")
+            },
         )
         gattServerHandler?.start()
 
         scope.launch {
-            graph.repository.observeTimeline().collect { events ->
+            graph.repository.observeToday().collect { events ->
                 currentServer = LocalSyncServer(events)
                 Log.d("timeline changed: %d events, root=%s", events.size, currentServer.truncatedRoot().toHex())
             }
@@ -143,11 +156,20 @@ class BleMeshService : Service() {
         meshLoopRunning = true
         scope.launch {
             val offset = initialPhaseOffsetMs()
-            Log.d("MESH loop: advertise continuously, scan %d ms of every %d ms (offset=%d ms)", SCAN_WINDOW_MS, PHASE_MS, offset)
+            Log.d("MESH loop: advertise %d ms then scan %d ms (offset=%d ms)", PHASE_MS, SCAN_WINDOW_MS, offset)
             delay(offset)
             while (isActive) {
+                if (gattSessionActive) {
+                    delay(200)
+                    continue
+                }
                 doStartAdvertising(graph)
                 delay(PHASE_MS)
+                if (gattSessionActive) continue
+                // Stop advertising while scanning so the radio is reliably connectable
+                // during the advertise window (scanning while advertising rejects incoming
+                // connections with status 133 on many devices).
+                stopAdvertising()
                 startScanning()
                 delay(SCAN_WINDOW_MS)
                 stopScanning()
@@ -275,23 +297,41 @@ class BleMeshService : Service() {
         Log.d("SCAN: root mismatch, connecting as client to %s", device.address)
         graph.meshStatus.setActiveSync(ActiveSync(packet.deviceId, "initiating"))
         syncingDevices.add(device.address)
+        gattSessionActive = true
+        stopScanning()
+        stopAdvertising()
         scope.launch(Dispatchers.IO) {
+            var success = false
             try {
-                val client = GattClientSync(this@BleMeshService, device)
-                if (client.connect() && client.awaitReady(10_000)) {
-                    client.writeIdentity(myId, graph.username)
-                    val peerUsername = client.readIdentity()
-                    peerUsername?.let { graph.nicknames.recordUsername(packet.deviceId, it) }
-                    graph.coordinator.sync(client.peer) { events ->
-                        client.pushEvents(events)
+                // Let the radio settle after stopping scan/advertise before connecting.
+                delay(CONNECT_SETTLE_MS)
+                for (attempt in 1..CONNECT_ATTEMPTS) {
+                    val client = GattClientSync(this@BleMeshService, device)
+                    try {
+                        if (client.connect() && client.awaitReady(CONNECT_READY_TIMEOUT_MS)) {
+                            client.writeIdentity(myId, graph.username)
+                            val peerUsername = client.readIdentity()
+                            peerUsername?.let { graph.nicknames.recordUsername(packet.deviceId, it) }
+                            graph.coordinator.sync(client.peer) { events ->
+                                client.pushEvents(events)
+                            }
+                            success = true
+                            break
+                        }
+                    } finally {
+                        client.close()
                     }
-                } else {
-                    Log.w("GATT connect/ready timed out for %s", device.address)
+                    if (attempt < CONNECT_ATTEMPTS) {
+                        delay(CONNECT_RETRY_DELAY_MS)
+                    }
                 }
-                client.close()
+                if (!success) {
+                    Log.w("GATT connect/ready timed out for %s after %d attempts", device.address, CONNECT_ATTEMPTS)
+                }
             } finally {
                 graph.meshStatus.setActiveSync(null)
                 syncingDevices.remove(device.address)
+                gattSessionActive = false
             }
         }
     }
@@ -322,5 +362,9 @@ class BleMeshService : Service() {
         const val NOTIFICATION_ID = 1
         const val PHASE_MS = 3_000L
         const val SCAN_WINDOW_MS = 1_500L
+        const val CONNECT_ATTEMPTS = 3
+        const val CONNECT_READY_TIMEOUT_MS = 8_000L
+        const val CONNECT_RETRY_DELAY_MS = 1_500L
+        const val CONNECT_SETTLE_MS = 300L
     }
 }

@@ -1,5 +1,8 @@
 name: Debug Build
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -11,6 +14,7 @@ on:
 jobs:
   debug:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,7 +31,14 @@ jobs:
       - name: Build debug APK
         env:
           VERSION: ${{ inputs.version }}
-        run: ./gradlew assembleDebug -PversionName=${VERSION}
+        run: ./gradlew assembleDebug -PversionName="${VERSION}"
+
+      - name: Rename debug APK
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk \
+             "app/build/outputs/apk/debug/bittr-v${VERSION}-debug.apk"
 
       - name: Upload debug APK as pre-release
         env:
@@ -35,7 +46,7 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           gh release create "v${VERSION}-debug" \
-            app/build/outputs/apk/debug/app-debug.apk#bittr-v${VERSION}-debug.apk \
+            "app/build/outputs/apk/debug/bittr-v${VERSION}-debug.apk" \
             --title "Bittr v${VERSION} (debug)" \
             --notes "Debug build (Logs tab + Timber + Hyperion)." \
             --prerelease
