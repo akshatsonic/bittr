@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
         val graph = (application as BitterApplication).graph
 
         focusEventId.value = intent.getStringExtra(EXTRA_FOCUS_EVENT_ID)
+        val promptUsername = graph.shouldPromptUsername()
 
         setContent {
             val darkTheme by graph.darkTheme.collectAsState()
@@ -63,6 +64,8 @@ class MainActivity : ComponentActivity() {
                         onToggleTheme = { graph.setDarkTheme(!darkTheme) },
                         focusEventId = focusId,
                         onFocusConsumed = { focusEventId.value = null },
+                        shouldPromptUsername = promptUsername,
+                        onUsernamePromptDone = { graph.markUsernamePromptShown() },
                     )
                 }
             }

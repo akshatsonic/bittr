@@ -76,6 +76,14 @@ class AppGraph(context: Context) {
         _darkTheme.value = dark
     }
 
+    fun shouldPromptUsername(): Boolean =
+        !prefs.getBoolean(USERNAME_PROMPT_SHOWN_KEY, false) &&
+            ownNickname.value == defaultNickname(deviceId)
+
+    fun markUsernamePromptShown() {
+        prefs.edit().putBoolean(USERNAME_PROMPT_SHOWN_KEY, true).apply()
+    }
+
     private fun loadOrCreateDeviceId(): Int {
         val existing = prefs.getInt("deviceId", -1)
         if (existing != -1) return existing
@@ -95,5 +103,6 @@ class AppGraph(context: Context) {
     private companion object {
         const val LOG_PREFS_KEY = "logs_v1"
         const val DARK_THEME_KEY = "dark_theme"
+        const val USERNAME_PROMPT_SHOWN_KEY = "username_prompt_shown"
     }
 }

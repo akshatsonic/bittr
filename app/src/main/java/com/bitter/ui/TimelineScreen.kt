@@ -106,6 +106,8 @@ fun TimelineScreen(
     onToggleTheme: () -> Unit,
     focusEventId: String?,
     onFocusConsumed: () -> Unit,
+    shouldPromptUsername: Boolean,
+    onUsernamePromptDone: () -> Unit,
 ) {
     val items by viewModel.items.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
@@ -118,6 +120,7 @@ fun TimelineScreen(
     var fingerprintTarget by remember { mutableStateOf<FingerprintTarget?>(null) }
     var likesTarget by remember { mutableStateOf<LikesTarget?>(null) }
     var selectedTab by remember { mutableStateOf(0) }
+    var showUsernamePrompt by remember { mutableStateOf(shouldPromptUsername) }
     val listState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -256,6 +259,21 @@ fun TimelineScreen(
                 )
             },
             onDismiss = { likesTarget = null },
+        )
+    }
+
+    if (showUsernamePrompt) {
+        UsernamePromptDialog(
+            currentUsername = ownNickname,
+            onSave = { newName ->
+                viewModel.setNickname(newName)
+                showUsernamePrompt = false
+                onUsernamePromptDone()
+            },
+            onDismiss = {
+                showUsernamePrompt = false
+                onUsernamePromptDone()
+            },
         )
     }
 }
@@ -722,6 +740,50 @@ private fun FingerprintDialog(target: FingerprintTarget, onDismiss: () -> Unit) 
         },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("Close") }
+        },
+    )
+}
+
+@Composable
+private fun UsernamePromptDialog(
+    currentUsername: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var draft by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Set your username") },
+        text = {
+            Column {
+                Text(
+                    text = "You're currently using the default username \"$currentUsername\".",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { newValue ->
+                        if (NicknamePacket.byteLength(newValue) <= NicknamePacket.MAX_NICKNAME_BYTES) {
+                            draft = newValue
+                        }
+                    },
+                    label = { Text("Your username") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(draft.trim().ifEmpty { currentUsername }) },
+                enabled = draft.isNotBlank(),
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Later") }
         },
     )
 }
