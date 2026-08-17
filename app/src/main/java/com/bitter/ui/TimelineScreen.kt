@@ -124,7 +124,11 @@ fun TimelineScreen(viewModel: TimelineViewModel, isDarkTheme: Boolean, onToggleT
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
+            ModalDrawerSheet(
+                modifier = Modifier.width(300.dp),
+                drawerShape = RoundedCornerShape(0.dp),
+                drawerContainerColor = if (isDarkTheme) BittrColors.DarkDrawer else MaterialTheme.colorScheme.surface,
+            ) {
                 DrawerContent(
                     meshState = meshState,
                     ownNickname = ownNickname,
@@ -365,27 +369,20 @@ private fun TimelineTab(
         ) {
             Avatar(name = ownDisplayName, seed = ownUsername, size = 36.dp)
             Spacer(modifier = Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                MentionComposer(
-                    value = draft,
-                    candidates = candidates,
-                    displayNames = displayNames,
-                    onValueChange = onDraftChange,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    Button(
-                        onClick = onPost,
-                        enabled = draft.text.isNotBlank(),
-                    ) {
-                        Text("Post")
-                    }
-                }
+            MentionComposer(
+                value = draft,
+                candidates = candidates,
+                displayNames = displayNames,
+                onValueChange = onDraftChange,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = onPost,
+                enabled = draft.text.isNotBlank(),
+                modifier = Modifier.padding(top = 6.dp),
+            ) {
+                Text("Post")
             }
         }
     }

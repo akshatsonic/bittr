@@ -11,6 +11,7 @@ object BittrColors {
     val Blurple = Color(0xFF5865F2)
     val Dark = Color(0xFF23272A)
     val White = Color(0xFFFFFFFF)
+    val DarkDrawer = Color(0xFF2B2D31)
 }
 
 private val DarkColors = darkColorScheme(
