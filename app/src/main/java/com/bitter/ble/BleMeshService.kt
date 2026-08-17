@@ -59,6 +59,9 @@ class BleMeshService : Service() {
     @Volatile
     private var meshLoopRunning = false
 
+    @Volatile
+    private var gattSessionActive = false
+
     private val advertiseCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
             Log.d("ADVERTISE started ok (mode=%d)", settingsInEffect.mode)
@@ -103,6 +106,16 @@ class BleMeshService : Service() {
             onPeerIdentity = { deviceId, username ->
                 scope.launch { graph.nicknames.recordUsername(deviceId, username) }
             },
+            onConnectionChange = { connected ->
+                if (connected) {
+                    gattSessionActive = true
+                    stopScanning()
+                    stopAdvertising()
+                } else {
+                    gattSessionActive = false
+                }
+                Log.d("GATT server session %s", if (connected) "active" else "ended")
+            },
         )
         gattServerHandler?.start()
 
@@ -146,8 +159,13 @@ class BleMeshService : Service() {
             Log.d("MESH loop: advertise continuously, scan %d ms of every %d ms (offset=%d ms)", SCAN_WINDOW_MS, PHASE_MS, offset)
             delay(offset)
             while (isActive) {
+                if (gattSessionActive) {
+                    delay(200)
+                    continue
+                }
                 doStartAdvertising(graph)
                 delay(PHASE_MS)
+                if (gattSessionActive) continue
                 startScanning()
                 delay(SCAN_WINDOW_MS)
                 stopScanning()
@@ -275,6 +293,9 @@ class BleMeshService : Service() {
         Log.d("SCAN: root mismatch, connecting as client to %s", device.address)
         graph.meshStatus.setActiveSync(ActiveSync(packet.deviceId, "initiating"))
         syncingDevices.add(device.address)
+        gattSessionActive = true
+        stopScanning()
+        stopAdvertising()
         scope.launch(Dispatchers.IO) {
             var success = false
             try {
@@ -304,6 +325,7 @@ class BleMeshService : Service() {
             } finally {
                 graph.meshStatus.setActiveSync(null)
                 syncingDevices.remove(device.address)
+                gattSessionActive = false
             }
         }
     }
