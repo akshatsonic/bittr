@@ -10,7 +10,10 @@ import kotlinx.coroutines.flow.Flow
 interface EventDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertAll(events: List<EventEntity>)
+    suspend fun insertAll(events: List<EventEntity>): List<Long>
+
+    @Query("SELECT * FROM events WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): EventEntity?
 
     @Query("SELECT * FROM events WHERE dayKey = :dayKey ORDER BY createdAt ASC")
     suspend fun eventsForDay(dayKey: String): List<EventEntity>

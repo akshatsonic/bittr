@@ -9,9 +9,12 @@ import kotlinx.coroutines.flow.map
 
 class RoomEventStore(private val dao: EventDao) : EventStore {
 
-    override suspend fun insertAll(events: List<Event>, dayKey: String) {
-        dao.insertAll(events.map { EventEntity.from(it, dayKey) })
+    override suspend fun insertAll(events: List<Event>, dayKey: String): List<Event> {
+        val ids = dao.insertAll(events.map { EventEntity.from(it, dayKey) })
+        return events.filterIndexed { index, _ -> ids[index] != -1L }
     }
+
+    override suspend fun findById(id: String): Event? = dao.findById(id)?.toEvent()
 
     override suspend fun eventsForDay(dayKey: String): List<Event> =
         dao.eventsForDay(dayKey).mapNotNull { it.toEvent() }

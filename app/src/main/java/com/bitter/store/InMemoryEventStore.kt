@@ -16,15 +16,18 @@ class InMemoryEventStore : EventStore {
     private val mutex = Mutex()
     private val state = MutableStateFlow<List<Row>>(emptyList())
 
-    override suspend fun insertAll(events: List<Event>, dayKey: String) {
+    override suspend fun insertAll(events: List<Event>, dayKey: String): List<Event> =
         mutex.withLock {
             val existing = state.value.map { it.event.id }.toHashSet()
             val toAdd = events.filter { it.id !in existing }.map { Row(it, dayKey) }
             if (toAdd.isNotEmpty()) {
                 state.value = state.value + toAdd
             }
+            toAdd.map { it.event }
         }
-    }
+
+    override suspend fun findById(id: String): Event? =
+        state.value.firstOrNull { it.event.id == id }?.event
 
     override suspend fun eventsForDay(dayKey: String): List<Event> =
         state.value.filter { it.dayKey == dayKey }.map { it.event }.sortedBy { it.createdAt }

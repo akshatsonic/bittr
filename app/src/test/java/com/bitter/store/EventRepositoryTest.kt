@@ -3,6 +3,8 @@ package com.bitter.store
 import com.bitter.crypto.Sha256
 import com.bitter.model.Event
 import com.bitter.model.EventKind
+import com.bitter.model.Mention
+import com.bitter.notify.Notifier
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -144,5 +146,60 @@ class EventRepositoryTest {
         val expected = listOf(e1, e2).map { com.bitter.merkle.MerkleTree.leafOf(it.id) }
             .sortedWith(com.bitter.merkle.Bytes)
         assertEquals(expected.map { Sha256.hex(it) }, leaves.map { Sha256.hex(it) })
+    }
+
+    @Test
+    fun `apply remote notifies on a mention of self`() = runTest {
+        val store = InMemoryEventStore()
+        val mentions = mutableListOf<Pair<String, String>>()
+        val notifier = object : Notifier {
+            override fun onMention(author: String, content: String) { mentions += author to content }
+        }
+        val r = EventRepository(store, "alice", clock = fixedClock, dayKeyOf = { "2026-01-14" }, notifier = notifier)
+        val event = Event.create(EventKind.POST, "bob", "hey ${Mention.token("alice")}!", null, fixedClock())
+        r.applyRemote(listOf(event))
+        assertEquals(listOf("bob" to "hey @{alice}!"), mentions)
+    }
+
+    @Test
+    fun `apply remote does not notify on a mention of someone else`() = runTest {
+        val store = InMemoryEventStore()
+        val mentions = mutableListOf<Pair<String, String>>()
+        val notifier = object : Notifier {
+            override fun onMention(author: String, content: String) { mentions += author to content }
+        }
+        val r = EventRepository(store, "alice", clock = fixedClock, dayKeyOf = { "2026-01-14" }, notifier = notifier)
+        val event = Event.create(EventKind.POST, "bob", "hey ${Mention.token("carol")}!", null, fixedClock())
+        r.applyRemote(listOf(event))
+        assertEquals(emptyList(), mentions)
+    }
+
+    @Test
+    fun `apply remote notifies on a like of my post`() = runTest {
+        val store = InMemoryEventStore()
+        val likes = mutableListOf<String>()
+        val notifier = object : Notifier {
+            override fun onLike(author: String) { likes += author }
+        }
+        val r = EventRepository(store, "alice", clock = fixedClock, dayKeyOf = { "2026-01-14" }, notifier = notifier)
+        val myPost = r.post("hello")
+        val like = Event.create(EventKind.LIKE, "bob", "", myPost.id, fixedClock() + 1)
+        r.applyRemote(listOf(like))
+        assertEquals(listOf("bob"), likes)
+    }
+
+    @Test
+    fun `apply remote does not notify on a like of someone else's post`() = runTest {
+        val store = InMemoryEventStore()
+        val likes = mutableListOf<String>()
+        val notifier = object : Notifier {
+            override fun onLike(author: String) { likes += author }
+        }
+        val r = EventRepository(store, "alice", clock = fixedClock, dayKeyOf = { "2026-01-14" }, notifier = notifier)
+        val otherPost = Event.create(EventKind.POST, "bob", "hello", null, fixedClock())
+        r.applyRemote(listOf(otherPost))
+        val like = Event.create(EventKind.LIKE, "carol", "", otherPost.id, fixedClock() + 1)
+        r.applyRemote(listOf(like))
+        assertEquals(emptyList(), likes)
     }
 }

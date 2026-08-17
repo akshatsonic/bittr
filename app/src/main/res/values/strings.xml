@@ -5,4 +5,6 @@
     <string name="notification_channel_description">Keeps the offline BLE mesh running in the background</string>
     <string name="notification_title">Bittr is running</string>
     <string name="notification_text">Using Bluetooth to sync the room timeline</string>
+    <string name="notification_channel_mentions">Mentions and likes</string>
+    <string name="notification_like_text">You have a new like</string>
 </resources>

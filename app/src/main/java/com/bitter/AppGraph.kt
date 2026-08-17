@@ -8,6 +8,7 @@ import com.bitter.log.LogStore
 import com.bitter.mesh.MeshCoordinator
 import com.bitter.mesh.MeshStatusStore
 import com.bitter.mesh.NicknameRegistry
+import com.bitter.notify.BittrNotifier
 import com.bitter.store.EventRepository
 import com.bitter.store.EventStore
 import com.bitter.store.db.BitterDatabase
@@ -54,7 +55,13 @@ class AppGraph(context: Context) {
 
     val store: EventStore = RoomEventStore(database.eventDao())
 
-    val repository: EventRepository = EventRepository(store, username)
+    val repository: EventRepository = EventRepository(
+        store,
+        username,
+        notifier = BittrNotifier(context) { name ->
+            nicknames.displayNames.value[name] ?: name
+        },
+    )
 
     val coordinator: MeshCoordinator = MeshCoordinator(repository, deviceId)
 

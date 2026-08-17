@@ -1,12 +1,21 @@
 package com.bitter.ui
 
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,8 +27,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DrawerValue
@@ -31,7 +42,6 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -48,6 +58,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.lerp
@@ -56,6 +67,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -261,7 +273,7 @@ private fun AppHeader(
                 Image(
                     painter = painterResource(R.drawable.ic_bittr_logo),
                     contentDescription = "Bittr",
-                    modifier = Modifier.height(32.dp),
+                    modifier = Modifier.height(44.dp),
                     colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground),
                 )
             }
@@ -703,7 +715,12 @@ private fun DrawerContent(
     onClose: () -> Unit,
 ) {
     var nicknameDraft by remember(ownNickname) { mutableStateOf(ownNickname) }
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
         Text(
             text = "Bittr",
             style = MaterialTheme.typography.headlineSmall,
@@ -762,22 +779,22 @@ private fun DrawerContent(
                 .align(Alignment.End)
                 .padding(top = 2.dp),
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Dark mode",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
-            Switch(
-                checked = isDarkTheme,
-                onCheckedChange = { onToggleTheme() },
-            )
-        }
+        Text(
+            text = "Appearance",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 16.dp),
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        ThemeSelector(isDarkTheme = isDarkTheme, onToggleTheme = onToggleTheme)
+        Text(
+            text = "Permissions",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 16.dp),
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        PermissionList()
         Text(
             text = "Nearby peers:",
             style = MaterialTheme.typography.labelMedium,
@@ -795,6 +812,109 @@ private fun DrawerContent(
             }
         }
     }
+}
+
+@Composable
+private fun ThemeSelector(isDarkTheme: Boolean, onToggleTheme: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(4.dp),
+    ) {
+        ThemeOption(
+            label = "Light",
+            iconRes = R.drawable.ic_sun,
+            selected = !isDarkTheme,
+            onClick = { if (isDarkTheme) onToggleTheme() },
+        )
+        ThemeOption(
+            label = "Dark",
+            iconRes = R.drawable.ic_moon,
+            selected = isDarkTheme,
+            onClick = { if (!isDarkTheme) onToggleTheme() },
+        )
+    }
+}
+
+@Composable
+private fun RowScope.ThemeOption(label: String, iconRes: Int, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = label,
+            tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private data class PermissionRow(val label: String, val granted: Boolean)
+
+@Composable
+private fun PermissionList() {
+    val context = LocalContext.current
+    val permissions = buildList {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(PermissionRow("Notifications", hasPermission(context, Manifest.permission.POST_NOTIFICATIONS)))
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val nearby = hasPermission(context, Manifest.permission.BLUETOOTH_CONNECT) &&
+                hasPermission(context, Manifest.permission.BLUETOOTH_SCAN)
+            add(PermissionRow("Nearby devices", nearby))
+        } else {
+            add(PermissionRow("Location", hasPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)))
+        }
+    }
+    Column {
+        permissions.forEach { row ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !row.granted) { openAppSettings(context) }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = row.label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = if (row.granted) "Granted" else "Not granted",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (row.granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+}
+
+private fun hasPermission(context: Context, permission: String): Boolean =
+    androidx.core.content.ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+
+private fun openAppSettings(context: Context) {
+    val intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.fromParts("package", context.packageName, null),
+    )
+    context.startActivity(intent)
 }
 
 @Composable
