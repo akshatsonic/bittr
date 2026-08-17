@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#EBE3A7</color>
-    <color name="bittr_orange">#EB7D00</color>
-    <color name="bittr_sage">#2C5745</color>
-    <color name="bittr_olive">#2E2910</color>
-    <color name="bittr_cream">#EBE3A7</color>
+    <color name="ic_launcher_background">#5865F2</color>
+    <color name="bittr_blurple">#5865F2</color>
+    <color name="bittr_dark">#23272A</color>
+    <color name="bittr_white">#FFFFFF</color>
 </resources>

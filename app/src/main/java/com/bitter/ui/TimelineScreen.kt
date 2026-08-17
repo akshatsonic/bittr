@@ -22,16 +22,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -83,7 +88,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 
 @Composable
-fun TimelineScreen(viewModel: TimelineViewModel) {
+fun TimelineScreen(viewModel: TimelineViewModel, isDarkTheme: Boolean, onToggleTheme: () -> Unit) {
     val items by viewModel.items.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
     val meshState by viewModel.meshState.collectAsState()
@@ -92,7 +97,6 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     val candidates by viewModel.candidates.collectAsState()
     val displayNames by viewModel.displayNames.collectAsState()
     var draft by remember { mutableStateOf(TextFieldValue("")) }
-    var showMeshDialog by remember { mutableStateOf(false) }
     var fingerprintTarget by remember { mutableStateOf<FingerprintTarget?>(null) }
     var likesTarget by remember { mutableStateOf<LikesTarget?>(null) }
     var selectedTab by remember { mutableStateOf(0) }
@@ -100,93 +104,110 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
 
     val ownUsername = viewModel.username
     val ownDisplayName = displayNames[ownUsername] ?: ownUsername
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                ) {
-                    focusManager.clearFocus()
-                    keyboard?.hide()
-                },
-        ) {
-            AppHeader(
-                ownDisplayName = ownDisplayName,
-                ownUsername = ownUsername,
-                meshState = meshState,
-                onMeshClick = { showMeshDialog = true },
-            )
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    text = { Text("Timeline") },
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
+                DrawerContent(
+                    meshState = meshState,
+                    ownNickname = ownNickname,
+                    isDarkTheme = isDarkTheme,
+                    onNicknameChange = { viewModel.setNickname(it) },
+                    onToggleTheme = onToggleTheme,
+                    onClose = { scope.launch { drawerState.close() } },
                 )
-                if (com.bitter.BuildConfig.DEBUG) {
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text("Logs") },
-                    )
-                }
             }
-            if (selectedTab == 0) {
-                TimelineTab(
-                    items = items,
-                    hasMore = hasMore,
-                    onLoadMore = viewModel::loadMore,
-                    listState = listState,
+        },
+    ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    ) {
+                        focusManager.clearFocus()
+                        keyboard?.hide()
+                    },
+            ) {
+                AppHeader(
                     ownDisplayName = ownDisplayName,
                     ownUsername = ownUsername,
-                    draft = draft,
-                    candidates = candidates,
-                    displayNames = displayNames,
-                    onDraftChange = { newValue ->
-                        if (newValue.text.length <= Event.MAX_CONTENT_LENGTH) {
-                            draft = newValue
-                        }
-                    },
-                    onPost = {
-                        val content = draft.text.trim()
-                        if (content.isNotEmpty()) {
-                            viewModel.post(content)
-                            draft = TextFieldValue("")
-                            scope.launch { listState.animateScrollToItem(0) }
-                        }
-                    },
-                    onLike = { item ->
-                        if (item.likedByMe) {
-                            viewModel.unlike(item.post.id)
-                        } else {
-                            viewModel.like(item.post.id)
-                        }
-                    },
-                    onShowLikers = { item ->
-                        likesTarget = LikesTarget(
-                            postId = item.post.id,
-                            likers = item.displayLikes.map { it.author },
-                            usernames = item.likes.map { it.author },
-                        )
-                    },
-                    onFingerprint = { username ->
-                        fingerprintTarget = FingerprintTarget(
-                            displayName = displayNames[username] ?: username,
-                            username = username,
-                            deviceId = viewModel.fingerprintFor(username),
-                        )
-                    },
+                    meshState = meshState,
+                    onMeshClick = { scope.launch { drawerState.open() } },
                 )
-            } else {
-                LogsTab(
-                    entries = logEntries,
-                    onClear = viewModel::clearLogs,
-                )
+                TabRow(selectedTabIndex = selectedTab) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Timeline") },
+                    )
+                    if (com.bitter.BuildConfig.DEBUG) {
+                        Tab(
+                            selected = selectedTab == 1,
+                            onClick = { selectedTab = 1 },
+                            text = { Text("Logs") },
+                        )
+                    }
+                }
+                if (selectedTab == 0) {
+                    TimelineTab(
+                        items = items,
+                        hasMore = hasMore,
+                        onLoadMore = viewModel::loadMore,
+                        listState = listState,
+                        ownDisplayName = ownDisplayName,
+                        ownUsername = ownUsername,
+                        draft = draft,
+                        candidates = candidates,
+                        displayNames = displayNames,
+                        onDraftChange = { newValue ->
+                            if (newValue.text.length <= Event.MAX_CONTENT_LENGTH) {
+                                draft = newValue
+                            }
+                        },
+                        onPost = {
+                            val content = draft.text.trim()
+                            if (content.isNotEmpty()) {
+                                viewModel.post(content)
+                                draft = TextFieldValue("")
+                                scope.launch { listState.animateScrollToItem(0) }
+                            }
+                        },
+                        onLike = { item ->
+                            if (item.likedByMe) {
+                                viewModel.unlike(item.post.id)
+                            } else {
+                                viewModel.like(item.post.id)
+                            }
+                        },
+                        onShowLikers = { item ->
+                            likesTarget = LikesTarget(
+                                postId = item.post.id,
+                                likers = item.displayLikes.map { it.author },
+                                usernames = item.likes.map { it.author },
+                            )
+                        },
+                        onFingerprint = { username ->
+                            fingerprintTarget = FingerprintTarget(
+                                displayName = displayNames[username] ?: username,
+                                username = username,
+                                deviceId = viewModel.fingerprintFor(username),
+                            )
+                        },
+                    )
+                } else {
+                    LogsTab(
+                        entries = logEntries,
+                        onClear = viewModel::clearLogs,
+                    )
+                }
             }
         }
     }
@@ -209,15 +230,6 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                 )
             },
             onDismiss = { likesTarget = null },
-        )
-    }
-
-    if (showMeshDialog) {
-        MeshDialog(
-            meshState = meshState,
-            ownNickname = ownNickname,
-            onNicknameChange = { viewModel.setNickname(it) },
-            onDismiss = { showMeshDialog = false },
         )
     }
 }
@@ -249,7 +261,7 @@ private fun AppHeader(
                 Image(
                     painter = painterResource(R.drawable.ic_bittr_logo),
                     contentDescription = "Bittr",
-                    modifier = Modifier.height(26.dp),
+                    modifier = Modifier.height(32.dp),
                     colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground),
                 )
             }
@@ -353,16 +365,8 @@ private fun TimelineTab(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    val remaining = Event.MAX_CONTENT_LENGTH - draft.text.length
-                    Text(
-                        text = "$remaining",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = charCountColor(remaining),
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = onPost,
                         enabled = draft.text.isNotBlank(),
@@ -425,6 +429,7 @@ private fun MentionComposer(
 ) {
     val resolve: (String) -> String = { username -> displayNames[username] ?: username }
     val chipStyle = mentionStyle()
+    val remaining = Event.MAX_CONTENT_LENGTH - value.text.length
 
     val active = remember(value.text, value.selection) {
         Mention.activeMention(value.text, value.selection.start)
@@ -473,7 +478,19 @@ private fun MentionComposer(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    inner()
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 18.dp),
+                    ) {
+                        inner()
+                    }
+                    Text(
+                        text = "$remaining",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = charCountColor(remaining),
+                        modifier = Modifier.align(Alignment.BottomEnd),
+                    )
                 }
             },
         )
@@ -677,86 +694,107 @@ private fun FingerprintDialog(target: FingerprintTarget, onDismiss: () -> Unit) 
 }
 
 @Composable
-private fun MeshDialog(
+private fun DrawerContent(
     meshState: MeshStatus,
     ownNickname: String,
+    isDarkTheme: Boolean,
     onNicknameChange: (String) -> Unit,
-    onDismiss: () -> Unit,
+    onToggleTheme: () -> Unit,
+    onClose: () -> Unit,
 ) {
     var nicknameDraft by remember(ownNickname) { mutableStateOf(ownNickname) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Mesh") },
-        text = {
-            Column {
-                Text(
-                    text = if (meshState.advertising) "Status: advertising" else "Status: not advertising",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                meshState.activeSync?.let { sync ->
-                    Text(
-                        text = "Status: ${
-                            when (sync.direction) {
-                                "initiating" -> "initiating request to device %08x".format(sync.deviceId)
-                                "serving" -> "serving request from device %08x".format(sync.deviceId)
-                                else -> "syncing with device %08x".format(sync.deviceId)
-                            }
-                        }",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 8.dp),
-                ) {
-                    OutlinedTextField(
-                        value = nicknameDraft,
-                        onValueChange = { newValue ->
-                            if (NicknamePacket.byteLength(newValue) <= NicknamePacket.MAX_NICKNAME_BYTES) {
-                                nicknameDraft = newValue
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        label = { Text("Your nickname") },
-                        singleLine = true,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = { onNicknameChange(nicknameDraft.trim()) }) {
-                        Text("Save")
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Text(
+            text = "Bittr",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = if (meshState.advertising) "Status: advertising" else "Status: not advertising",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        meshState.activeSync?.let { sync ->
+            Text(
+                text = "Status: ${
+                    when (sync.direction) {
+                        "initiating" -> "initiating request to device %08x".format(sync.deviceId)
+                        "serving" -> "serving request from device %08x".format(sync.deviceId)
+                        else -> "syncing with device %08x".format(sync.deviceId)
                     }
-                }
-                val nickRemaining = NicknamePacket.MAX_NICKNAME_BYTES - NicknamePacket.byteLength(nicknameDraft)
-                Text(
-                    text = "$nickRemaining",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = charCountColor(nickRemaining, NicknamePacket.MAX_NICKNAME_BYTES),
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .padding(top = 2.dp),
-                )
-                Text(
-                    text = "Nearby peers:",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                if (meshState.peers.isEmpty()) {
-                    Text(
-                        text = "none in range",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    meshState.peers.forEach { peer ->
-                        PeerRow(peer)
+                }",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 12.dp),
+        ) {
+            OutlinedTextField(
+                value = nicknameDraft,
+                onValueChange = { newValue ->
+                    if (NicknamePacket.byteLength(newValue) <= NicknamePacket.MAX_NICKNAME_BYTES) {
+                        nicknameDraft = newValue
                     }
-                }
+                },
+                modifier = Modifier.weight(1f),
+                label = { Text("Your nickname") },
+                singleLine = true,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = {
+                    onNicknameChange(nicknameDraft.trim())
+                    onClose()
+                },
+            ) {
+                Text("Save")
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
-        },
-    )
+        }
+        val nickRemaining = NicknamePacket.MAX_NICKNAME_BYTES - NicknamePacket.byteLength(nicknameDraft)
+        Text(
+            text = "$nickRemaining",
+            style = MaterialTheme.typography.labelSmall,
+            color = charCountColor(nickRemaining, NicknamePacket.MAX_NICKNAME_BYTES),
+            modifier = Modifier
+                .align(Alignment.End)
+                .padding(top = 2.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Dark mode",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(
+                checked = isDarkTheme,
+                onCheckedChange = { onToggleTheme() },
+            )
+        }
+        Text(
+            text = "Nearby peers:",
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(top = 16.dp),
+        )
+        if (meshState.peers.isEmpty()) {
+            Text(
+                text = "none in range",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            meshState.peers.forEach { peer ->
+                PeerRow(peer)
+            }
+        }
+    }
 }
 
 @Composable

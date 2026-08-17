@@ -9,6 +9,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bitter.ble.BleMeshService
 import com.bitter.ui.BitterTheme
@@ -28,7 +30,8 @@ class MainActivity : ComponentActivity() {
         val graph = (application as BitterApplication).graph
 
         setContent {
-            BitterTheme {
+            val darkTheme by graph.darkTheme.collectAsState()
+            BitterTheme(darkTheme = darkTheme) {
                 TimelineScreen(
                     viewModel = viewModel(
                         factory = TimelineViewModelFactory(
@@ -42,6 +45,8 @@ class MainActivity : ComponentActivity() {
                             logStore = graph.logStore,
                         ),
                     ),
+                    isDarkTheme = darkTheme,
+                    onToggleTheme = { graph.setDarkTheme(!darkTheme) },
                 )
             }
         }

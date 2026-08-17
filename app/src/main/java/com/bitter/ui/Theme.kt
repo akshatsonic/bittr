@@ -8,48 +8,47 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 object BittrColors {
-    val Orange = Color(0xFFEB7D00)
-    val Sage = Color(0xFF2C5745)
-    val Olive = Color(0xFF2E2910)
-    val Cream = Color(0xFFEBE3A7)
+    val Blurple = Color(0xFF5865F2)
+    val Dark = Color(0xFF23272A)
+    val White = Color(0xFFFFFFFF)
 }
 
 private val DarkColors = darkColorScheme(
-    primary = BittrColors.Orange,
-    onPrimary = BittrColors.Olive,
-    primaryContainer = BittrColors.Sage,
-    onPrimaryContainer = BittrColors.Cream,
-    secondary = BittrColors.Cream,
-    onSecondary = BittrColors.Olive,
-    background = BittrColors.Olive,
-    onBackground = BittrColors.Cream,
-    surface = BittrColors.Olive,
-    onSurface = BittrColors.Cream,
-    surfaceVariant = Color(0xFF3B3620),
-    onSurfaceVariant = BittrColors.Cream,
-    outline = BittrColors.Sage,
+    primary = BittrColors.Blurple,
+    onPrimary = BittrColors.White,
+    primaryContainer = BittrColors.Blurple,
+    onPrimaryContainer = BittrColors.White,
+    secondary = BittrColors.Blurple,
+    onSecondary = BittrColors.White,
+    background = BittrColors.Dark,
+    onBackground = BittrColors.White,
+    surface = BittrColors.Dark,
+    onSurface = BittrColors.White,
+    surfaceVariant = Color(0xFF2E3338),
+    onSurfaceVariant = Color(0xFFB5BAC1),
+    outline = Color(0xFF3F4147),
 )
 
 private val LightColors = lightColorScheme(
-    primary = BittrColors.Orange,
-    onPrimary = Color.White,
-    primaryContainer = BittrColors.Orange,
-    onPrimaryContainer = BittrColors.Olive,
-    secondary = BittrColors.Sage,
-    onSecondary = Color.White,
-    background = BittrColors.Cream,
-    onBackground = BittrColors.Olive,
-    surface = BittrColors.Cream,
-    onSurface = BittrColors.Olive,
-    surfaceVariant = Color(0xFFF4EEC9),
-    onSurfaceVariant = BittrColors.Sage,
-    outline = BittrColors.Sage,
+    primary = BittrColors.Blurple,
+    onPrimary = BittrColors.White,
+    primaryContainer = BittrColors.Blurple,
+    onPrimaryContainer = BittrColors.White,
+    secondary = BittrColors.Blurple,
+    onSecondary = BittrColors.White,
+    background = BittrColors.White,
+    onBackground = BittrColors.Dark,
+    surface = BittrColors.White,
+    onSurface = BittrColors.Dark,
+    surfaceVariant = Color(0xFFE3E5E8),
+    onSurfaceVariant = Color(0xFF4E5058),
+    outline = Color(0xFFC9CDD3),
 )
 
 @Composable
-fun BitterTheme(content: @Composable () -> Unit) {
+fun BitterTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors,
+        colorScheme = if (darkTheme) DarkColors else LightColors,
         content = content,
     )
 }

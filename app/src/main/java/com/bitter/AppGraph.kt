@@ -35,6 +35,9 @@ class AppGraph(context: Context) {
     private val _ownNickname = MutableStateFlow(nickPref)
     val ownNickname: StateFlow<String> = _ownNickname
 
+    private val _darkTheme = MutableStateFlow(prefs.getBoolean(DARK_THEME_KEY, false))
+    val darkTheme: StateFlow<Boolean> = _darkTheme
+
     val nicknames: NicknameRegistry = NicknameRegistry()
 
     val meshStatus: MeshStatusStore = MeshStatusStore()
@@ -61,6 +64,11 @@ class AppGraph(context: Context) {
         _ownNickname.value = normalized
     }
 
+    fun setDarkTheme(dark: Boolean) {
+        prefs.edit().putBoolean(DARK_THEME_KEY, dark).apply()
+        _darkTheme.value = dark
+    }
+
     private fun loadOrCreateDeviceId(): Int {
         val existing = prefs.getInt("deviceId", -1)
         if (existing != -1) return existing
@@ -79,5 +87,6 @@ class AppGraph(context: Context) {
 
     private companion object {
         const val LOG_PREFS_KEY = "logs_v1"
+        const val DARK_THEME_KEY = "dark_theme"
     }
 }
