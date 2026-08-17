@@ -151,22 +151,26 @@ class EventRepositoryTest {
     @Test
     fun `apply remote notifies on a mention of self`() = runTest {
         val store = InMemoryEventStore()
-        val mentions = mutableListOf<Pair<String, String>>()
+        val mentions = mutableListOf<Triple<String, String, String>>()
         val notifier = object : Notifier {
-            override fun onMention(author: String, content: String) { mentions += author to content }
+            override fun onMention(author: String, content: String, eventId: String) {
+                mentions += Triple(author, content, eventId)
+            }
         }
         val r = EventRepository(store, "alice", clock = fixedClock, dayKeyOf = { "2026-01-14" }, notifier = notifier)
         val event = Event.create(EventKind.POST, "bob", "hey ${Mention.token("alice")}!", null, fixedClock())
         r.applyRemote(listOf(event))
-        assertEquals(listOf("bob" to "hey @{alice}!"), mentions)
+        assertEquals(listOf(Triple("bob", "hey @{alice}!", event.id)), mentions)
     }
 
     @Test
     fun `apply remote does not notify on a mention of someone else`() = runTest {
         val store = InMemoryEventStore()
-        val mentions = mutableListOf<Pair<String, String>>()
+        val mentions = mutableListOf<Triple<String, String, String>>()
         val notifier = object : Notifier {
-            override fun onMention(author: String, content: String) { mentions += author to content }
+            override fun onMention(author: String, content: String, eventId: String) {
+                mentions += Triple(author, content, eventId)
+            }
         }
         val r = EventRepository(store, "alice", clock = fixedClock, dayKeyOf = { "2026-01-14" }, notifier = notifier)
         val event = Event.create(EventKind.POST, "bob", "hey ${Mention.token("carol")}!", null, fixedClock())
@@ -179,7 +183,7 @@ class EventRepositoryTest {
         val store = InMemoryEventStore()
         val likes = mutableListOf<String>()
         val notifier = object : Notifier {
-            override fun onLike(author: String) { likes += author }
+            override fun onLike(author: String, targetEventId: String) { likes += author }
         }
         val r = EventRepository(store, "alice", clock = fixedClock, dayKeyOf = { "2026-01-14" }, notifier = notifier)
         val myPost = r.post("hello")
@@ -193,7 +197,7 @@ class EventRepositoryTest {
         val store = InMemoryEventStore()
         val likes = mutableListOf<String>()
         val notifier = object : Notifier {
-            override fun onLike(author: String) { likes += author }
+            override fun onLike(author: String, targetEventId: String) { likes += author }
         }
         val r = EventRepository(store, "alice", clock = fixedClock, dayKeyOf = { "2026-01-14" }, notifier = notifier)
         val otherPost = Event.create(EventKind.POST, "bob", "hello", null, fixedClock())

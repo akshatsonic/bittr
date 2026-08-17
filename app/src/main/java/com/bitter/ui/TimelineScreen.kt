@@ -100,7 +100,13 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 
 @Composable
-fun TimelineScreen(viewModel: TimelineViewModel, isDarkTheme: Boolean, onToggleTheme: () -> Unit) {
+fun TimelineScreen(
+    viewModel: TimelineViewModel,
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+    focusEventId: String?,
+    onFocusConsumed: () -> Unit,
+) {
     val items by viewModel.items.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
     val meshState by viewModel.meshState.collectAsState()
@@ -183,6 +189,8 @@ fun TimelineScreen(viewModel: TimelineViewModel, isDarkTheme: Boolean, onToggleT
                         draft = draft,
                         candidates = candidates,
                         displayNames = displayNames,
+                        focusEventId = focusEventId,
+                        onFocusConsumed = onFocusConsumed,
                         onDraftChange = { newValue ->
                             if (newValue.text.length <= Event.MAX_CONTENT_LENGTH) {
                                 draft = newValue
@@ -324,6 +332,8 @@ private fun TimelineTab(
     draft: TextFieldValue,
     candidates: List<Mention.Candidate>,
     displayNames: Map<String, String>,
+    focusEventId: String?,
+    onFocusConsumed: () -> Unit,
     onDraftChange: (TextFieldValue) -> Unit,
     onPost: () -> Unit,
     onLike: (TimelineItem) -> Unit,
@@ -339,6 +349,18 @@ private fun TimelineTab(
     }
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore) onLoadMore()
+    }
+    LaunchedEffect(focusEventId, items) {
+        val focus = focusEventId ?: return@LaunchedEffect
+        val index = items.indexOfFirst { it.post.id == focus }
+        when {
+            index >= 0 -> {
+                listState.animateScrollToItem(index)
+                onFocusConsumed()
+            }
+            hasMore -> onLoadMore()
+            else -> onFocusConsumed()
+        }
     }
     Column {
         LazyColumn(

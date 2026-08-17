@@ -20,8 +20,11 @@ import com.bitter.ui.BitterTheme
 import com.bitter.ui.SplashScreen
 import com.bitter.ui.TimelineScreen
 import com.bitter.ui.TimelineViewModelFactory
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
+
+    private val focusEventId = MutableStateFlow<String?>(null)
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -33,8 +36,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val graph = (application as BitterApplication).graph
 
+        focusEventId.value = intent.getStringExtra(EXTRA_FOCUS_EVENT_ID)
+
         setContent {
             val darkTheme by graph.darkTheme.collectAsState()
+            val focusId by focusEventId.collectAsState()
             BitterTheme(darkTheme = darkTheme) {
                 var showSplash by remember { mutableStateOf(true) }
                 if (showSplash) {
@@ -55,6 +61,8 @@ class MainActivity : ComponentActivity() {
                         ),
                         isDarkTheme = darkTheme,
                         onToggleTheme = { graph.setDarkTheme(!darkTheme) },
+                        focusEventId = focusId,
+                        onFocusConsumed = { focusEventId.value = null },
                     )
                 }
             }
@@ -65,6 +73,12 @@ class MainActivity : ComponentActivity() {
         } else {
             permissionLauncher.launch(requiredPermissions().toTypedArray())
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        focusEventId.value = intent.getStringExtra(EXTRA_FOCUS_EVENT_ID)
     }
 
     private fun requiredPermissions(): List<String> =
@@ -92,5 +106,9 @@ class MainActivity : ComponentActivity() {
             this,
             Intent(this, BleMeshService::class.java),
         )
+    }
+
+    companion object {
+        const val EXTRA_FOCUS_EVENT_ID = "com.bitter.focus_event_id"
     }
 }

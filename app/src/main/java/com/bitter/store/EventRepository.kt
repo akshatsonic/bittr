@@ -58,13 +58,13 @@ class EventRepository(
         when (event.kind) {
             EventKind.POST -> {
                 if (event.content.contains(Mention.token(username))) {
-                    notifier.onMention(event.author, event.content)
+                    notifier.onMention(event.author, event.content, event.id)
                 }
             }
             EventKind.LIKE -> {
                 val targetId = event.targetEventId
                 if (targetId != null && store.findById(targetId)?.author == username) {
-                    notifier.onLike(event.author)
+                    notifier.onLike(event.author, targetId)
                 }
             }
             else -> Unit
