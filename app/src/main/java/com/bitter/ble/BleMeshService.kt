@@ -156,7 +156,7 @@ class BleMeshService : Service() {
         meshLoopRunning = true
         scope.launch {
             val offset = initialPhaseOffsetMs()
-            Log.d("MESH loop: advertise continuously, scan %d ms of every %d ms (offset=%d ms)", SCAN_WINDOW_MS, PHASE_MS, offset)
+            Log.d("MESH loop: advertise %d ms then scan %d ms (offset=%d ms)", PHASE_MS, SCAN_WINDOW_MS, offset)
             delay(offset)
             while (isActive) {
                 if (gattSessionActive) {
@@ -166,6 +166,10 @@ class BleMeshService : Service() {
                 doStartAdvertising(graph)
                 delay(PHASE_MS)
                 if (gattSessionActive) continue
+                // Stop advertising while scanning so the radio is reliably connectable
+                // during the advertise window (scanning while advertising rejects incoming
+                // connections with status 133 on many devices).
+                stopAdvertising()
                 startScanning()
                 delay(SCAN_WINDOW_MS)
                 stopScanning()
@@ -299,6 +303,8 @@ class BleMeshService : Service() {
         scope.launch(Dispatchers.IO) {
             var success = false
             try {
+                // Let the radio settle after stopping scan/advertise before connecting.
+                delay(CONNECT_SETTLE_MS)
                 for (attempt in 1..CONNECT_ATTEMPTS) {
                     val client = GattClientSync(this@BleMeshService, device)
                     try {
@@ -356,8 +362,9 @@ class BleMeshService : Service() {
         const val NOTIFICATION_ID = 1
         const val PHASE_MS = 3_000L
         const val SCAN_WINDOW_MS = 1_500L
-        const val CONNECT_ATTEMPTS = 2
+        const val CONNECT_ATTEMPTS = 3
         const val CONNECT_READY_TIMEOUT_MS = 8_000L
-        const val CONNECT_RETRY_DELAY_MS = 400L
+        const val CONNECT_RETRY_DELAY_MS = 1_500L
+        const val CONNECT_SETTLE_MS = 300L
     }
 }
