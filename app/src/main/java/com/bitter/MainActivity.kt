@@ -11,9 +11,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bitter.ble.BleMeshService
 import com.bitter.ui.BitterTheme
+import com.bitter.ui.SplashScreen
 import com.bitter.ui.TimelineScreen
 import com.bitter.ui.TimelineViewModelFactory
 
@@ -32,22 +36,27 @@ class MainActivity : ComponentActivity() {
         setContent {
             val darkTheme by graph.darkTheme.collectAsState()
             BitterTheme(darkTheme = darkTheme) {
-                TimelineScreen(
-                    viewModel = viewModel(
-                        factory = TimelineViewModelFactory(
-                            repository = graph.repository,
-                            username = graph.username,
-                            deviceId = graph.deviceId,
-                            nicknames = graph.nicknames,
-                            meshStatus = graph.meshStatus,
-                            ownNickname = graph.ownNickname,
-                            setOwnNickname = graph::setOwnNickname,
-                            logStore = graph.logStore,
+                var showSplash by remember { mutableStateOf(true) }
+                if (showSplash) {
+                    SplashScreen(onFinished = { showSplash = false })
+                } else {
+                    TimelineScreen(
+                        viewModel = viewModel(
+                            factory = TimelineViewModelFactory(
+                                repository = graph.repository,
+                                username = graph.username,
+                                deviceId = graph.deviceId,
+                                nicknames = graph.nicknames,
+                                meshStatus = graph.meshStatus,
+                                ownNickname = graph.ownNickname,
+                                setOwnNickname = graph::setOwnNickname,
+                                logStore = graph.logStore,
+                            ),
                         ),
-                    ),
-                    isDarkTheme = darkTheme,
-                    onToggleTheme = { graph.setDarkTheme(!darkTheme) },
-                )
+                        isDarkTheme = darkTheme,
+                        onToggleTheme = { graph.setDarkTheme(!darkTheme) },
+                    )
+                }
             }
         }
 
