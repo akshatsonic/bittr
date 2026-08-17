@@ -92,6 +92,9 @@ class GattServerHandler(
 
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             Log.d("GATT server connection state: device=%s status=%d newState=%d", device.address, status, newState)
+            if (newState != BluetoothProfile.STATE_CONNECTED) {
+                writeStreams.remove(device.address)
+            }
             onConnectionChange(newState == BluetoothProfile.STATE_CONNECTED)
         }
 

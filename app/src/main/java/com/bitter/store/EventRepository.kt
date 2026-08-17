@@ -55,19 +55,23 @@ class EventRepository(
 
     private suspend fun notifyIfRelevant(event: Event) {
         if (event.author == username) return
-        when (event.kind) {
-            EventKind.POST -> {
-                if (event.content.contains(Mention.token(username))) {
-                    notifier.onMention(event.author, event.content, event.id)
+        try {
+            when (event.kind) {
+                EventKind.POST -> {
+                    if (event.content.contains(Mention.token(username))) {
+                        notifier.onMention(event.author, event.content, event.id)
+                    }
                 }
-            }
-            EventKind.LIKE -> {
-                val targetId = event.targetEventId
-                if (targetId != null && store.findById(targetId)?.author == username) {
-                    notifier.onLike(event.author, targetId)
+                EventKind.LIKE -> {
+                    val targetId = event.targetEventId
+                    if (targetId != null && store.findById(targetId)?.author == username) {
+                        notifier.onLike(event.author, targetId)
+                    }
                 }
+                else -> Unit
             }
-            else -> Unit
+        } catch (e: Exception) {
+            com.bitter.log.Log.w("notify skipped for event %s: %s", event.id.take(8), e.message ?: e.toString())
         }
     }
 
