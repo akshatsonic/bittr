@@ -73,6 +73,8 @@ class EventRepository(
 
     fun observeTimeline(): Flow<List<Event>> = store.observeAll()
 
+    fun observeToday(): Flow<List<Event>> = store.observeDay(todayKey())
+
     fun observePosts(limit: Int): Flow<List<Event>> = store.observePosts(limit)
 
     fun observeInteractions(): Flow<List<Event>> = store.observeInteractions()

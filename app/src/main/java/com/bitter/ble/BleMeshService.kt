@@ -120,7 +120,7 @@ class BleMeshService : Service() {
         gattServerHandler?.start()
 
         scope.launch {
-            graph.repository.observeTimeline().collect { events ->
+            graph.repository.observeToday().collect { events ->
                 currentServer = LocalSyncServer(events)
                 Log.d("timeline changed: %d events, root=%s", events.size, currentServer.truncatedRoot().toHex())
             }
