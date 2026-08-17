@@ -276,19 +276,31 @@ class BleMeshService : Service() {
         graph.meshStatus.setActiveSync(ActiveSync(packet.deviceId, "initiating"))
         syncingDevices.add(device.address)
         scope.launch(Dispatchers.IO) {
+            var success = false
             try {
-                val client = GattClientSync(this@BleMeshService, device)
-                if (client.connect() && client.awaitReady(10_000)) {
-                    client.writeIdentity(myId, graph.username)
-                    val peerUsername = client.readIdentity()
-                    peerUsername?.let { graph.nicknames.recordUsername(packet.deviceId, it) }
-                    graph.coordinator.sync(client.peer) { events ->
-                        client.pushEvents(events)
+                for (attempt in 1..CONNECT_ATTEMPTS) {
+                    val client = GattClientSync(this@BleMeshService, device)
+                    try {
+                        if (client.connect() && client.awaitReady(CONNECT_READY_TIMEOUT_MS)) {
+                            client.writeIdentity(myId, graph.username)
+                            val peerUsername = client.readIdentity()
+                            peerUsername?.let { graph.nicknames.recordUsername(packet.deviceId, it) }
+                            graph.coordinator.sync(client.peer) { events ->
+                                client.pushEvents(events)
+                            }
+                            success = true
+                            break
+                        }
+                    } finally {
+                        client.close()
                     }
-                } else {
-                    Log.w("GATT connect/ready timed out for %s", device.address)
+                    if (attempt < CONNECT_ATTEMPTS) {
+                        delay(CONNECT_RETRY_DELAY_MS)
+                    }
                 }
-                client.close()
+                if (!success) {
+                    Log.w("GATT connect/ready timed out for %s after %d attempts", device.address, CONNECT_ATTEMPTS)
+                }
             } finally {
                 graph.meshStatus.setActiveSync(null)
                 syncingDevices.remove(device.address)
@@ -322,5 +334,8 @@ class BleMeshService : Service() {
         const val NOTIFICATION_ID = 1
         const val PHASE_MS = 3_000L
         const val SCAN_WINDOW_MS = 1_500L
+        const val CONNECT_ATTEMPTS = 2
+        const val CONNECT_READY_TIMEOUT_MS = 8_000L
+        const val CONNECT_RETRY_DELAY_MS = 400L
     }
 }
